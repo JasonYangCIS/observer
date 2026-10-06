@@ -12,11 +12,11 @@ An agentic news and community feed built on the Agent-Native framework (https://
 
 ## Hosting, CI/CD, and environments
 
-Hosting target: **Netlify** (already wired via `netlify.toml`, `NITRO_PRESET=netlify`) with hosted Postgres. Local dev uses PGlite (`data/pglite`).
+Hosting target: **Netlify** (already wired via `netlify.toml`, `NITRO_PRESET=netlify`) with **Supabase** Postgres. Local dev uses PGlite (`data/pglite`).
 
 - **Environments:** local (PGlite) → deploy previews (separate DB, never run production migrations) → production. `netlify.toml` already runs `pnpm migrate:production` only when `CONTEXT=production`; keep it that way.
 - **Scheduled work and time limits:** daily ingest → summarize → score can exceed serverless function limits. Verify against the Agent-Native Automations docs and Netlify docs (scheduled functions have a short execution limit; background functions allow much longer). Design jobs as small, resumable, idempotent units (per source, per batch of items) that can be retried without duplicating items, rather than one long run.
-- **Database:** `DATABASE_URL` points at hosted Postgres (Netlify DB or equivalent). Use separate databases for preview and production.
+- **Database (Supabase):** runtime `DATABASE_URL` is the Supabase **transaction pooler** URL (serverless-friendly; the framework already disables prepared statements for Supabase URLs). Production migrations use the **direct or session** URL via `MIGRATION_DATABASE_URL`, never the transaction pooler. Use separate Supabase projects (or at least separate databases) for preview and production, with Netlify env vars scoped per deploy context.
 - **Migrations:** additive and reviewed. No destructive migration auto-runs on production deploy; split those into expand/contract steps.
 - **Secrets:** LLM keys and any Reddit / Product Hunt / GitHub credentials live in Netlify environment variables or the framework's secrets registry (`secrets` skill). Never committed, never hardcoded.
 - **CI (GitHub Actions) on every PR:** `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test`, `pnpm agent-native:doctor`. Netlify builds the deploy preview; CI gates merging to `main`.
@@ -125,7 +125,7 @@ Score on: topical relevance, original reporting vs. aggregation or SEO content, 
 ### Phase 0 — Foundations (hosting and CI)
 - Clean template leftovers out of `netlify.toml` (see Hosting section).
 - Add GitHub Actions CI (install, typecheck, test, `agent-native:doctor`).
-- Provision hosted Postgres, set `DATABASE_URL` and secrets in Netlify, and deploy the empty app to a preview and production site.
+- Provision Supabase, set `DATABASE_URL` (transaction pooler), `MIGRATION_DATABASE_URL` (direct/session), and secrets in Netlify, and deploy the empty app to a preview and production site.
 - Confirm how Automations run on Netlify and their time limits; record the findings here.
 - Remove `actions/hello.ts` once the first real action exists.
 
