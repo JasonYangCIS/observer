@@ -40,6 +40,8 @@ export interface FeedItem {
   title: string;
   url: string;
   discussionUrl: string | null;
+  /** https thumbnail URL, or null when the source and page had none. */
+  imageUrl: string | null;
   author: string | null;
   postedAt: string | null;
   source: { id: string; name: string; type: string; origin: string };
@@ -121,6 +123,7 @@ export async function listFeed(args: { ownerEmail: string; limit: number; source
       title: r.item.title,
       url: r.item.url,
       discussionUrl: r.item.discussionUrl,
+      imageUrl: r.item.imageUrl,
       author: r.item.author,
       postedAt: r.item.postedAt,
       source: { id: r.source.id, name: r.source.name, type: r.source.type, origin: r.source.origin },

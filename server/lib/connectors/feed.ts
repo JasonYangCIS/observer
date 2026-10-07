@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { safeImageUrl } from "../image-url.js";
 import type { Connector, NormalizedItem } from "./types.js";
 
 const MAX_ITEMS = 100;
@@ -59,6 +60,37 @@ function httpUrl(u: string | undefined): string | undefined {
   }
 }
 
+/** The object-valued children of a parsed XML node (a single child or a list). */
+function records(node: unknown): Record<string, unknown>[] {
+  return asArray(node as unknown).filter((x): x is Record<string, unknown> => !!x && typeof x === "object");
+}
+
+function isImageNode(node: Record<string, unknown>): boolean {
+  const type = text(node["@_type"]) ?? "";
+  const medium = text(node["@_medium"]) ?? "";
+  return type.startsWith("image/") || medium === "image" || (!type && !medium);
+}
+
+/** First usable thumbnail on an RSS item or Atom entry (media:thumbnail, media:content, enclosure, link enclosure). */
+function entryImage(entry: Record<string, unknown>, base: string): string | undefined {
+  const candidates: (string | undefined)[] = records(entry["media:thumbnail"]).map((n) => text(n["@_url"]));
+  for (const key of ["media:content", "enclosure"]) {
+    for (const node of records(entry[key])) {
+      if (isImageNode(node)) candidates.push(text(node["@_url"]));
+    }
+  }
+  for (const link of records(entry.link)) {
+    if (text(link["@_rel"]) === "enclosure" && (text(link["@_type"]) ?? "").startsWith("image/")) {
+      candidates.push(text(link["@_href"]));
+    }
+  }
+  for (const candidate of candidates) {
+    const safe = safeImageUrl(candidate, base);
+    if (safe) return safe;
+  }
+  return undefined;
+}
+
 /** Parse RSS 2.0 or Atom 1.0 into normalized items. Throws on unrecognized XML. */
 export function parseFeed(xml: string): NormalizedItem[] {
   const doc = parser.parse(xml);
@@ -76,6 +108,7 @@ export function parseFeed(xml: string): NormalizedItem[] {
         title,
         author: text(it["dc:creator"]) ?? text(it.author),
         postedAt: toIso(it.pubDate),
+        imageUrl: entryImage(it, url),
         metrics: {},
       });
     }
@@ -93,6 +126,7 @@ export function parseFeed(xml: string): NormalizedItem[] {
         title,
         author: text(e.author?.name),
         postedAt: toIso(e.published) ?? toIso(e.updated),
+        imageUrl: entryImage(e, url),
         metrics: {},
       });
     }

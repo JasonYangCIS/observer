@@ -8,6 +8,8 @@ export interface NormalizedItem {
   externalId: string;
   url: string;
   discussionUrl?: string;
+  /** https thumbnail URL from the source, when it provides one. */
+  imageUrl?: string;
   title: string;
   author?: string;
   /** ISO-8601 timestamp, when the source provides one. */

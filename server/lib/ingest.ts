@@ -142,6 +142,7 @@ async function upsertItems(
       externalId: b.externalId,
       url: b.url,
       discussionUrl: b.discussionUrl ?? null,
+      imageUrl: b.imageUrl ?? null,
       title: b.title,
       author: b.author ?? null,
       postedAt: b.postedAt ?? null,
@@ -157,6 +158,8 @@ async function upsertItems(
           title: sql`excluded.title`,
           rawMetrics: sql`excluded.raw_metrics`,
           discussionUrl: sql`excluded.discussion_url`,
+          // Keep an image found earlier (e.g. from the article page) if this fetch has none.
+          imageUrl: sql`coalesce(excluded.image_url, ${items.imageUrl})`,
         },
       });
   }

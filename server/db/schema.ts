@@ -83,6 +83,7 @@ export const items = table(
     externalId: text("external_id").notNull(),
     url: text("url").notNull(),
     discussionUrl: text("discussion_url"),
+    imageUrl: text("image_url"), // https thumbnail URL only; images themselves are never stored
     title: text("title").notNull(),
     author: text("author"),
     postedAt: text("posted_at"),
