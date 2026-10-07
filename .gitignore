@@ -149,3 +149,7 @@ vite.config.ts.timestamp-*
 .turbo
 
 .generated/
+
+# Local dev database (PGlite)
+/data/pglite/
+/data/pglite.agent-native-pglite.lock
