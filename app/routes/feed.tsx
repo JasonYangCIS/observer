@@ -5,26 +5,12 @@ import { useSetPageTitle } from "@agent-native/toolkit/app-shell";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
+import { FeedRow, relativeTime, type FeedItem } from "@/components/feed/FeedRow";
 import { Button } from "@/components/ui/button";
 import { APP_TITLE } from "@/lib/app-config";
 
 export function meta() {
   return [{ title: `Feed — ${APP_TITLE}` }];
-}
-
-interface FeedItem {
-  id: string;
-  title: string;
-  url: string;
-  discussionUrl: string | null;
-  author: string | null;
-  postedAt: string | null;
-  source: { id: string; name: string; type: string; origin: string };
-  summary: { text: string; citationCount: number; articleUnreadable: boolean };
-  relevance: number;
-  importance: number;
-  reason: string;
-  metrics: { points?: number; comments?: number };
 }
 
 interface FeedProgress {
@@ -33,91 +19,6 @@ interface FeedProgress {
   needSummary: number;
   needScore: number;
   ready: number;
-}
-
-/** Links come from the open web; only ever render http(s) ones. */
-function safeHref(url: string | null | undefined): string | undefined {
-  if (!url) return undefined;
-  try {
-    const { protocol } = new URL(url);
-    return protocol === "https:" || protocol === "http:" ? url : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function relativeTime(iso: string | null): string | null {
-  if (!iso) return null;
-  const ms = new Date(iso).getTime();
-  if (Number.isNaN(ms)) return null;
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-  const diff = ms - Date.now();
-  for (const [unit, size] of [["day", 86_400_000], ["hour", 3_600_000], ["minute", 60_000]] as const) {
-    if (Math.abs(diff) >= size) return rtf.format(Math.round(diff / size), unit);
-  }
-  return rtf.format(0, "second");
-}
-
-const chip = "rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground";
-
-function FeedCard({ item }: { item: FeedItem }) {
-  const t = useT();
-  const articleHref = safeHref(item.url);
-  const discussionHref = safeHref(item.discussionUrl);
-  const posted = relativeTime(item.postedAt);
-  return (
-    <article className="rounded-lg border border-border p-4">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">{item.source.name}</span>
-        <span className={chip}>{item.source.origin === "user" ? t("feed.trusted") : t("feed.discovered")}</span>
-        {posted ? <span>{posted}</span> : null}
-        {item.author ? <span>· {item.author}</span> : null}
-      </div>
-
-      <h2 className="mt-1.5 text-base font-semibold leading-snug">
-        {articleHref ? (
-          <a href={articleHref} target="_blank" rel="noopener noreferrer" className="hover:underline">
-            {item.title}
-          </a>
-        ) : (
-          item.title
-        )}
-      </h2>
-
-      <p className={`mt-2 text-sm leading-relaxed ${item.summary.articleUnreadable ? "italic text-muted-foreground" : ""}`}>
-        {item.summary.text}
-      </p>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className={chip}>{t("feed.relevance", { value: item.relevance })}</span>
-        <span className={chip}>{t("feed.importance", { value: item.importance })}</span>
-        {item.summary.articleUnreadable ? (
-          <span className={chip}>{t("feed.unreadable")}</span>
-        ) : item.summary.citationCount > 0 ? (
-          <span className={chip}>{t("feed.citations", { count: item.summary.citationCount })}</span>
-        ) : null}
-      </div>
-      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-        <span className="font-medium">{t("feed.why")}: </span>
-        {item.reason}
-      </p>
-
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-        {articleHref ? (
-          <a href={articleHref} target="_blank" rel="noopener noreferrer" className="font-medium underline-offset-2 hover:underline">
-            {t("feed.readArticle")}
-          </a>
-        ) : null}
-        {discussionHref ? (
-          <a href={discussionHref} target="_blank" rel="noopener noreferrer" className="font-medium underline-offset-2 hover:underline">
-            {t("feed.discussion")}
-          </a>
-        ) : null}
-        {item.metrics.points !== undefined ? <span className="text-muted-foreground">{t("feed.points", { count: item.metrics.points })}</span> : null}
-        {item.metrics.comments !== undefined ? <span className="text-muted-foreground">{t("feed.comments", { count: item.metrics.comments })}</span> : null}
-      </div>
-    </article>
-  );
 }
 
 interface DailyUpdate {
@@ -221,7 +122,7 @@ export default function FeedPage() {
   const runInAgent = (message: string) => sendToAgentChat({ message, submit: true, openSidebar: true });
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-6">
+    <div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">{t("feed.title")}</h1>
@@ -245,7 +146,7 @@ export default function FeedPage() {
         </div>
       ) : null}
 
-      <section className="mt-6 space-y-4" aria-live="polite">
+      <section className="mt-6" aria-live="polite">
         {isLoading ? (
           <div className="space-y-3" aria-hidden="true">
             {[0, 1, 2].map((i) => (
@@ -268,7 +169,11 @@ export default function FeedPage() {
             <p className="mt-1 text-sm text-muted-foreground">{t("feed.emptyDescription")}</p>
           </div>
         ) : (
-          feedItems.map((item) => <FeedCard key={item.id} item={item} />)
+          <ol className="divide-y divide-border border-y border-border">
+            {feedItems.map((item, index) => (
+              <FeedRow key={item.id} item={item} rank={index + 1} />
+            ))}
+          </ol>
         )}
       </section>
     </div>

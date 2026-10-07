@@ -93,6 +93,18 @@ describe("listFeed", () => {
     expect((await listFeed({ ownerEmail: owner, limit: 1, now: NOW })).items).toHaveLength(1);
   });
 
+  it("shows importance only when the source reported engagement, but still ranks with the baseline", async () => {
+    const owner = "baseline@example.com";
+    const hn = await addSource(owner, { type: "hn", connector: "api", name: "HN" });
+    const feed = await addSource(owner, { name: "Plain feed" });
+    const measured = await addItem(hn, { owner, relevance: 50, importance: 20, metrics: { points: 5, comments: 1 }, title: "Measured" });
+    const baseline = await addItem(feed, { owner, relevance: 50, importance: 20, metrics: {}, title: "Baseline" });
+    const { items } = await listFeed({ ownerEmail: owner, limit: 10, now: NOW });
+    expect(items.find((i) => i.id === measured)?.importance).toBe(20); // a real 20 is still shown
+    expect(items.find((i) => i.id === baseline)?.importance).toBeNull(); // the flat baseline is hidden
+    expect(items.map((i) => i.id).sort()).toEqual([measured, baseline].sort());
+  });
+
   it("flags summaries of unreadable articles", async () => {
     const owner = "unreadable@example.com";
     const src = await addSource(owner);

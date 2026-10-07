@@ -1,5 +1,6 @@
 import { and, count, desc, eq, isNull, inArray } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
+import { hasEngagementData } from "./scores.js";
 
 const { items, summaries, scores, sources } = schema;
 
@@ -45,7 +46,8 @@ export interface FeedItem {
   source: { id: string; name: string; type: string; origin: string };
   summary: { text: string; citationCount: number; articleUnreadable: boolean };
   relevance: number;
-  importance: number;
+  /** 0-100 buzz from real engagement numbers, or null when the source reported none (only a baseline exists). */
+  importance: number | null;
   reason: string;
   metrics: { points?: number; comments?: number };
 }
@@ -126,7 +128,7 @@ export async function listFeed(args: { ownerEmail: string; limit: number; source
       source: { id: r.source.id, name: r.source.name, type: r.source.type, origin: r.source.origin },
       summary: { text: r.summary.summaryText, citationCount: citationCount(r.summary.citations), articleUnreadable: r.summary.inputHash === null },
       relevance: r.score.relevance,
-      importance: r.score.importance,
+      importance: hasEngagementData(r.item.rawMetrics) ? r.score.importance : null,
       reason: r.score.reason,
       metrics: readMetrics(r.item.rawMetrics),
     })),
