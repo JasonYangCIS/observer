@@ -2,6 +2,7 @@ import { and, count, desc, eq, isNull, inArray } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
 import { EMPTY_FEEDBACK, getFeedbackStates, type FeedbackState } from "./feedback.js";
 import { hasEngagementData } from "./scores.js";
+import { trustRankAdjustment } from "./trust.js";
 import { parseTimestamp } from "./time.js";
 
 const { items, summaries, scores, sources } = schema;
@@ -18,11 +19,12 @@ export function recencyFactor(timestamp: string | null | undefined, now: number)
 }
 
 /**
- * Order used by the feed: 60% relevance to the user, 20% importance, 20% recency.
+ * Order used by the feed: 60% relevance to the user, 20% importance, 20% recency,
+ * plus up to ±10 points for how much the user trusts the source (from their feedback).
  * It only orders items; the UI always shows the underlying scores and reason.
  */
-export function rankScore(relevance: number, importance: number, recency: number): number {
-  return 0.6 * relevance + 0.2 * importance + 0.2 * 100 * recency;
+export function rankScore(relevance: number, importance: number, recency: number, trustWeight = 1): number {
+  return 0.6 * relevance + 0.2 * importance + 0.2 * 100 * recency + trustRankAdjustment(trustWeight);
 }
 
 /** An exploration pick needs measured buzz at least this high... */
@@ -41,7 +43,7 @@ export interface FeedItem {
   discussionUrl: string | null;
   author: string | null;
   postedAt: string | null;
-  source: { id: string; name: string; type: string; origin: string };
+  source: { id: string; name: string; type: string; origin: string; /** From the user's feedback on this source; 1 is neutral. */ trustWeight: number };
   summary: { text: string; citationCount: number; articleUnreadable: boolean };
   relevance: number;
   /** 0-100 buzz from real engagement numbers, or null when the source reported none (only a baseline exists). */
@@ -124,7 +126,7 @@ export async function listFeed(args: {
     .filter((r) => (view === "saved" ? stateOf(r.item.id).saved : !stateOf(r.item.id).skipped))
     .map((r) => ({
       r,
-      rank: rankScore(r.score.relevance, r.score.importance, recencyFactor(r.item.postedAt ?? r.item.createdAt, now)),
+      rank: rankScore(r.score.relevance, r.score.importance, recencyFactor(r.item.postedAt ?? r.item.createdAt, now), r.source.trustWeight),
     }))
     .sort((a, b) => b.rank - a.rank)
     .map(({ r }) => ({
@@ -134,7 +136,7 @@ export async function listFeed(args: {
       discussionUrl: r.item.discussionUrl,
       author: r.item.author,
       postedAt: r.item.postedAt,
-      source: { id: r.source.id, name: r.source.name, type: r.source.type, origin: r.source.origin },
+      source: { id: r.source.id, name: r.source.name, type: r.source.type, origin: r.source.origin, trustWeight: r.source.trustWeight },
       summary: { text: r.summary.summaryText, citationCount: citationCount(r.summary.citations), articleUnreadable: r.summary.inputHash === null },
       relevance: r.score.relevance,
       importance: hasEngagementData(r.item.rawMetrics) ? r.score.importance : null,

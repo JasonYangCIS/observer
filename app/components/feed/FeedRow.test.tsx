@@ -25,7 +25,7 @@ const item: FeedItem = {
   discussionUrl: "https://news.ycombinator.com/item?id=1",
   author: "ada",
   postedAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
-  source: { id: "s1", name: "Hacker News", type: "hn", origin: "user" },
+  source: { id: "s1", name: "Hacker News", type: "hn", origin: "user", trustWeight: 1 },
   summary: { text: "A short summary.", citationCount: 2, articleUnreadable: false },
   relevance: 85,
   importance: 42,

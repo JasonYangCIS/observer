@@ -24,6 +24,7 @@ interface SourceView {
   errorCount: number;
   lastError: string | null;
   itemCount: number;
+  trustWeight: number;
 }
 
 function relativeTime(iso: string): string {
@@ -180,6 +181,11 @@ export default function SourcesPage() {
                       {s.origin === "user" ? (
                         <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                           {t("sources.trusted")}
+                        </span>
+                      ) : null}
+                      {Math.abs(s.trustWeight - 1) >= 0.05 ? (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground" title={t("sources.trustHint")}>
+                          {t("sources.trust", { value: s.trustWeight.toFixed(2) })}
                         </span>
                       ) : null}
                       {!s.enabled ? (
