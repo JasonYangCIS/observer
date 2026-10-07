@@ -16,7 +16,7 @@ function translate(key: string, options?: Record<string, unknown>): string {
 
 vi.mock("@agent-native/core/client/i18n", () => ({ useT: () => translate }));
 
-const { FeedRow, safeHref } = await import("./FeedRow");
+const { FeedRow, safeHref, toggleFeedback } = await import("./FeedRow");
 
 const item: FeedItem = {
   id: "i1",
@@ -31,6 +31,7 @@ const item: FeedItem = {
   importance: 42,
   reason: "Covers edge rendering. Matched: web development. Buzz: 51 points.",
   metrics: { points: 51, comments: 14 },
+  feedback: { liked: false, skipped: false, saved: false, opened: false },
 };
 const html = (over: Partial<FeedItem> = {}, props: { defaultOpen?: boolean } = {}) =>
   renderToStaticMarkup(<FeedRow item={{ ...item, ...over }} rank={3} {...props} />);
@@ -87,6 +88,40 @@ describe("FeedRow", () => {
     expect(out).toContain("Article couldn&#x27;t be read");
     expect(out).toContain(">Discussion<");
     expect(out).not.toMatch(/<span>\d+ points<\/span>/); // the reason text in the tooltip may still mention points
+  });
+});
+
+describe("feedback controls", () => {
+  const none = { liked: false, skipped: false, saved: false, opened: false };
+
+  it("shows like, skip, and save as toggle buttons, labelled by state", () => {
+    const out = html();
+    for (const label of ["like", "skip", "save"]) expect(out).toContain(`>${label}</button>`);
+    expect(out.match(/aria-pressed="false"/g)).toHaveLength(3);
+    const active = html({ feedback: { ...none, liked: true, saved: true } });
+    expect(active).toContain(">liked</button>");
+    expect(active).toContain(">saved</button>");
+    expect(active.match(/aria-pressed="true"/g)).toHaveLength(2);
+  });
+
+  it("collapses a skipped item to an undo line in the feed, but not in the saved view", () => {
+    const skipped = { feedback: { ...none, skipped: true } };
+    const feedView = html(skipped);
+    expect(feedView).toContain("Skipped: ");
+    expect(feedView).toContain(">undo</button>");
+    expect(feedView).not.toContain("<h2");
+    const savedView = renderToStaticMarkup(<FeedRow item={{ ...item, ...skipped }} rank={1} view="saved" />);
+    expect(savedView).toContain("<h2");
+    expect(savedView).not.toContain("Skipped: ");
+  });
+
+  it("applies the same rules as the server: like and skip exclude each other, save is independent", () => {
+    expect(toggleFeedback(none, "like")).toEqual({ active: true, next: { ...none, liked: true } });
+    expect(toggleFeedback({ ...none, liked: true, saved: true }, "skip").next).toEqual({ ...none, skipped: true, saved: true });
+    expect(toggleFeedback({ ...none, skipped: true }, "like").next).toEqual({ ...none, liked: true });
+    expect(toggleFeedback({ ...none, liked: true }, "like")).toEqual({ active: false, next: none });
+    expect(toggleFeedback({ ...none, saved: true, liked: true }, "save").next).toEqual({ ...none, liked: true });
+    expect(toggleFeedback({ ...none, opened: true }, "like").next.opened).toBe(true);
   });
 });
 

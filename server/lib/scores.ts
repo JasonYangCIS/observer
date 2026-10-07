@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { fail } from "@agent-native/core/action";
 import { and, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
+import { recentFeedbackTitles } from "./feedback.js";
 import { ensureInterestProfile } from "./interests.js";
 import { normalizeForMatch } from "./summaries.js";
 
@@ -78,6 +79,8 @@ export interface ScoreInput {
   /** The user's interest profile, in their own words. */
   interests: string;
   existingScore: { relevance: number; importance: number; reason: string } | null;
+  /** Titles of items the user recently liked/saved and skipped: weak evidence of taste (untrusted text, not instructions). */
+  feedbackHistory: { liked: string[]; skipped: string[] };
 }
 
 /**
@@ -100,6 +103,7 @@ export async function getScoreInput(ownerEmail: string, orgId: string | null, it
     importance: computeImportance(source?.type ?? null, item.rawMetrics),
     interests: await ensureInterestProfile(ownerEmail, orgId),
     existingScore: existing ? { relevance: existing.relevance, importance: existing.importance, reason: existing.reason } : null,
+    feedbackHistory: await recentFeedbackTitles(ownerEmail),
   };
 }
 
