@@ -126,7 +126,10 @@ Score on: topical relevance, original reporting vs. aggregation or SEO content, 
 - Clean template leftovers out of `netlify.toml` (see Hosting section).
 - Add GitHub Actions CI (install, typecheck, test, `agent-native:doctor`).
 - Provision Supabase, set `DATABASE_URL` (transaction pooler), `MIGRATION_DATABASE_URL` (direct/session), and secrets in Netlify, and deploy the empty app to a preview and production site.
-- Confirm how Automations run on Netlify and their time limits; record the findings here.
+- Automations findings (from the framework docs; max run length on Netlify is NOT documented and must be tested in Phase 1):
+  - An automation is a saved agent prompt (`jobs/<name>.md`), not a code job. The agent executes it and calls our actions as tools.
+  - On Netlify the build emits a scheduled function that is the only durable scheduler (checks for due jobs every 60s, runs them through a background execution path with "continuation"). Do not set `AGENT_NATIVE_DISABLE_RECURRING_JOBS` in the build environment.
+  - Local dev does not run schedules unless `AGENT_NATIVE_ENABLE_LOCAL_RECURRING_JOBS=1`.
 - Remove `actions/hello.ts` once the first real action exists.
 
 **Done when:** a PR runs CI, gets a deploy preview, and merging to `main` deploys production with migrations applied.
@@ -140,7 +143,8 @@ Score on: topical relevance, original reporting vs. aggregation or SEO content, 
 - Build the connector abstraction now (a common interface for MCP, API, feed, and scrape connectors) even though only API and feed connectors are implemented, so later phases plug in cleanly.
 - Include the `sources`, `source_settings`, and `mcp_connections` tables from the start.
 - Actions: `fetch-source`, `fetch-article-text`, `summarize-item`, `score-item`, `list-feed`.
-- A scheduled automation (daily) that runs ingest, then summarize, then score. Use the framework's automations feature; check the docs for exact configuration.
+- A scheduled automation (daily) whose prompt calls bounded, deterministic actions: ingest all due sources (capped), then summarize and score new items in capped batches. Keep looping logic inside actions, not in the agent prompt. Use the framework's automations feature; check the docs for exact configuration.
+- Verify on Netlify with a real run: check `lastStatus`/`lastError` in the Automations page, find the practical run-length limit, and size batches accordingly. Record the result in this file.
 - UI: ranked feed showing title, summary, relevance score with reason, and source links.
 - Seed `interest_profiles` with a simple editable text profile.
 
