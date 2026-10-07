@@ -8,7 +8,7 @@ export interface FeedItem {
   discussionUrl: string | null;
   author: string | null;
   postedAt: string | null;
-  source: { id: string; name: string; type: string; origin: string };
+  source: { id: string; name: string; type: string; origin: string; trustWeight: number };
   summary: { text: string; citationCount: number; articleUnreadable: boolean };
   relevance: number;
   importance: number | null;
@@ -222,6 +222,11 @@ export function FeedRow({
                 ? ` · ${t("feed.citations", { count: item.summary.citationCount })}`
                 : ""}
             </p>
+            {Math.abs(item.source.trustWeight - 1) >= 0.05 ? (
+              <p className="text-xs text-muted-foreground">
+                {t("feed.trustNote", { source: item.source.name, value: item.source.trustWeight.toFixed(2) })}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { fail } from "@agent-native/core/action";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
+import { recomputeSourceTrust } from "./trust.js";
 
 const { feedback, items } = schema;
 
@@ -42,6 +43,8 @@ export async function getFeedbackStates(ownerEmail: string, itemIds: string[]): 
  * is independent. `opened` is a fact about what happened, so it can be recorded
  * but not undone. Recording a signal that is already set changes nothing.
  *
+ * The item's source trust weight is recomputed from the new history.
+ *
  * @returns the item's feedback state after the change.
  * @throws not_found when the item doesn't exist for this owner; cannot_unopen.
  */
@@ -71,6 +74,7 @@ export async function recordFeedback(args: {
       await tx.delete(feedback).where(and(eq(feedback.ownerEmail, ownerEmail), eq(feedback.itemId, itemId), eq(feedback.signal, signal)));
     }
   });
+  await recomputeSourceTrust(ownerEmail, itemId);
   return { itemId, ...(await getFeedbackStates(ownerEmail, [itemId])).get(itemId) ?? EMPTY_FEEDBACK };
 }
 

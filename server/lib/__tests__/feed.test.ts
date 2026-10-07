@@ -45,7 +45,7 @@ type TestFeedItem = Parameters<typeof applyExploration>[0][number];
 function fake(id: string, relevance: number, importance: number | null): TestFeedItem {
   return {
     id, title: id, url: `https://x.example.com/${id}`, discussionUrl: null, author: null, postedAt: null,
-    source: { id: "s", name: "S", type: "hn", origin: "user" }, summary: { text: "s", citationCount: 1, articleUnreadable: false },
+    source: { id: "s", name: "S", type: "hn", origin: "user", trustWeight: 1 }, summary: { text: "s", citationCount: 1, articleUnreadable: false },
     relevance, importance, reason: "r", metrics: {}, feedback: { liked: false, skipped: false, saved: false, opened: false }, exploration: false,
   };
 }

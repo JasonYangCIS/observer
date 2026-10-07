@@ -176,7 +176,7 @@ Built as four small PRs, each verified before the next:
 1. **Feedback.** New `feedback` table. `record-feedback` (like | skip | save | opened; like and skip are mutually exclusive, save is independent, any can be toggled off). Row controls for like, skip, and save; opening an article records `opened`. Skipped items leave the feed; a Saved view lists saved items. `get-score-input` shows the agent recent liked and skipped titles so relevance reflects feedback history.
 2. **Interests.** `get-interests` and `update-interests` (the agent turns "more edge rendering, less crypto" into a rewritten plain-language profile), plus an editor screen. Scores record which profile version produced them, so an edit makes recent scores stale and the pending-score list re-queues them (capped).
 3. **Exploration slots.** A few feed positions (about two per ten) reserved for measured high-importance, low-relevance items, tagged "outside your usual interests". None when nothing qualifies.
-4. **Source trust from feedback.** Likes, saves, and opens nudge a source's `trust_weight`; repeated skips lower it (feeds Phase 3 discovery).
+4. **Source trust from feedback.** *(Built.)* `sources.trust_weight` is recomputed from the full feedback history on every change (likes 1, saves 2, opens 0.25, skips 1.5 against, shrunk toward neutral), scales the origin's base weight by 0.5x to 1.5x, adds up to ±10 ranking points, and shows on the Sources screen and in an item's expanded "why". Discovery (Phase 3) will start discovered sources lower and demote them on repeated skips.
 
 **Done when:** the user can say what they want more or less of, see the feed change, and see why.
 

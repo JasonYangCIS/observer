@@ -3,7 +3,7 @@ import { fail } from "@agent-native/core/action";
 import { and, count, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
 
-const { sources, sourceSettings, items, summaries, scores, runs } = schema;
+const { sources, sourceSettings, items, summaries, scores, runs, feedback } = schema;
 
 export type SourceKind = "hn" | "rss";
 
@@ -173,7 +173,7 @@ export async function updateSource(args: {
   return view;
 }
 
-/** Delete a source and everything derived from it (items, summaries, scores, runs). */
+/** Delete a source and everything derived from it (items, summaries, scores, feedback, runs). */
 export async function removeSource(ownerEmail: string, id: string): Promise<{ removedItems: number }> {
   const db = getDb();
   return db.transaction(async (tx) => {
@@ -189,6 +189,7 @@ export async function removeSource(ownerEmail: string, id: string): Promise<{ re
       const chunk = itemIds.slice(i, i + 100);
       await tx.delete(summaries).where(and(eq(summaries.ownerEmail, ownerEmail), inArray(summaries.itemId, chunk)));
       await tx.delete(scores).where(and(eq(scores.ownerEmail, ownerEmail), inArray(scores.itemId, chunk)));
+      await tx.delete(feedback).where(and(eq(feedback.ownerEmail, ownerEmail), inArray(feedback.itemId, chunk)));
     }
     await tx.delete(items).where(and(eq(items.sourceId, id), eq(items.ownerEmail, ownerEmail)));
     await tx.delete(runs).where(and(eq(runs.sourceId, id), eq(runs.ownerEmail, ownerEmail)));
