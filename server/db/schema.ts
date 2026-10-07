@@ -9,6 +9,11 @@ const createdAt = () =>
     .notNull()
     .default(sql`now()`);
 
+const updatedAt = () =>
+  text("updated_at")
+    .notNull()
+    .default(sql`now()`);
+
 export const sources = table(
   "sources",
   {
@@ -47,7 +52,7 @@ export const sourceSettings = table(
     denylistDomains: text("denylist_domains").notNull().default("[]"), // JSON array
     preferredCategories: text("preferred_categories").notNull().default("[]"), // JSON array
     scrapeAllowed: boolean("scrape_allowed").notNull().default(false),
-    updatedAt: createdAt(),
+    updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex("source_settings_owner_uidx").on(t.ownerEmail)],
 );
@@ -134,7 +139,7 @@ export const interestProfiles = table(
     ownerEmail: text("owner_email").notNull(),
     orgId: text("org_id"),
     profileText: text("profile_text").notNull(),
-    updatedAt: createdAt(),
+    updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex("interest_profiles_owner_uidx").on(t.ownerEmail)],
 );
