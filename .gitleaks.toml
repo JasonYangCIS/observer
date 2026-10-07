@@ -1,0 +1,18 @@
+title = "Observer gitleaks config"
+
+[extend]
+useDefault = true
+
+# Database URLs with an inline password (postgres://user:password@host/db).
+[[rules]]
+id = "database-url-with-password"
+description = "Database connection string containing a password"
+regex = '''(?i)postgres(?:ql)?://[^\s:@/'"]+:[^\s@/'"<>\[\]{}$]{4,}@[^\s'"]+'''
+keywords = ["postgres"]
+
+[allowlist]
+description = "Placeholders and docs"
+regexes = [
+  '''(?i)postgres(?:ql)?://user:password@''',
+  '''(?i)postgres(?:ql)?://[^\s:@/]+:(?:password|\[YOUR-PASSWORD\]|YOUR_PASSWORD|<[^>]+>|\$\{[^}]+\})@''',
+]

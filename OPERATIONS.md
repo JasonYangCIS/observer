@@ -53,3 +53,9 @@ Notes:
 
 - `PLAN.md` — product plan, phases, and hosting decisions.
 - `DEVELOPING.md` — local development.
+
+## Secret hygiene
+
+- GitHub secret scanning and push protection are enabled on the repo (it is public).
+- CI runs gitleaks (`.github/workflows/secrets.yml`, config in `.gitleaks.toml`) on every PR and push to `main`. It adds a rule for database URLs with inline passwords. Real values never belong in code, docs, tests, or chat; use obvious placeholders such as `postgresql://user:password@host/db`.
+- `.env*` (except `.env.example`), `.agent-native/`, and local database files are gitignored. If a secret is ever committed, rotate it immediately; removing it from a later commit does not remove it from history.
