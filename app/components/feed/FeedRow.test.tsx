@@ -32,6 +32,7 @@ const item: FeedItem = {
   reason: "Covers edge rendering. Matched: web development. Buzz: 51 points.",
   metrics: { points: 51, comments: 14 },
   feedback: { liked: false, skipped: false, saved: false, opened: false },
+  alsoOn: [],
   exploration: false,
 };
 const html = (over: Partial<FeedItem> = {}, props: { defaultOpen?: boolean } = {}) =>
@@ -89,6 +90,29 @@ describe("FeedRow", () => {
     expect(out).toContain("Article couldn&#x27;t be read");
     expect(out).toContain(">Discussion<");
     expect(out).not.toMatch(/<span>\d+ points<\/span>/); // the reason text in the tooltip may still mention points
+  });
+});
+
+describe("also on", () => {
+  const other = (name: string, over: object = {}) => ({ source: { id: name, name, type: "lobsters" }, url: `https://${name}.example.com/story`, discussionUrl: `https://${name}.example.com/thread`, metrics: { points: 66, comments: 31 }, ...over });
+
+  it("lists the other sources as links to their threads, with their engagement on hover", () => {
+    const out = html({ alsoOn: [other("lobsters"), other("reddit", { metrics: {} })] });
+    expect(out).toContain("also on");
+    expect(out).toContain('href="https://lobsters.example.com/thread"');
+    expect(out).toContain('title="66 points · 31 comments"');
+    expect(out).toContain('href="https://reddit.example.com/thread"');
+    expect(out).toContain('title="reddit"'); // no engagement numbers: just the name
+    expect(out.indexOf(">lobsters<")).toBeLessThan(out.indexOf(">reddit<"));
+  });
+
+  it("falls back to the story link, renders plain text when no link is safe, and shows nothing for a lone story", () => {
+    expect(html({ alsoOn: [other("lobsters", { discussionUrl: null })] })).toContain('href="https://lobsters.example.com/story"');
+    const unsafe = html({ alsoOn: [other("lobsters", { discussionUrl: "javascript:alert(1)", url: "data:text/html,x" })] });
+    expect(unsafe).not.toContain("javascript:");
+    expect(unsafe).not.toContain("data:text");
+    expect(unsafe).toContain("lobsters");
+    expect(html()).not.toContain("also on");
   });
 });
 

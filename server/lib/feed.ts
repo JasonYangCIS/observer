@@ -1,11 +1,12 @@
-import { and, count, desc, eq, isNull, inArray } from "drizzle-orm";
+import { and, count, desc, eq, isNull, inArray, not } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
+import { isRedundantMember } from "./cluster.js";
 import { EMPTY_FEEDBACK, getFeedbackStates, type FeedbackState } from "./feedback.js";
-import { hasEngagementData } from "./scores.js";
+import { BASELINE_IMPORTANCE, computeImportance, hasEngagementData } from "./scores.js";
 import { trustRankAdjustment } from "./trust.js";
 import { parseTimestamp } from "./time.js";
 
-const { items, summaries, scores, sources } = schema;
+const { items, summaries, scores, sources, clusters, clusterItems } = schema;
 
 const HALF_LIFE_MS = 24 * 60 * 60 * 1000;
 /** How many of the newest scored items are ranked; the feed shows the top `limit` of them. */
@@ -36,6 +37,39 @@ export const EXPLORE_MAX = 2;
 /** Zero-based positions the exploration items are inserted at (4th and 9th). */
 export const EXPLORE_POSITIONS = [3, 8];
 
+export interface AlsoOn {
+  source: { id: string; name: string; type: string };
+  url: string;
+  /** The thread on that source, when it has one. */
+  discussionUrl: string | null;
+  metrics: { points?: number; comments?: number };
+}
+
+/** Extra importance points per additional source carrying the same story, and the most they can add. */
+export const PRESENCE_POINTS = 10;
+export const MAX_PRESENCE_POINTS = 30;
+
+export interface ClusterMember {
+  sourceId: string;
+  sourceType: string;
+  rawMetrics: string;
+}
+
+/**
+ * Importance of a story seen on several sources: the best measured buzz among
+ * them, plus 10 points for each extra source (at most 30). A story on two or more
+ * sources counts as measured even when none of them report engagement, since
+ * being picked up by several communities is itself evidence; a story on one
+ * source with no engagement stays null. Returns null when nothing measured exists.
+ */
+export function clusterImportance(members: ClusterMember[]): number | null {
+  const distinct = new Set(members.map((m) => m.sourceId)).size;
+  const measured = members.filter((m) => hasEngagementData(m.rawMetrics)).map((m) => computeImportance(m.sourceType, m.rawMetrics).score);
+  const bonus = Math.min(MAX_PRESENCE_POINTS, PRESENCE_POINTS * Math.max(0, distinct - 1));
+  if (measured.length > 0) return Math.min(100, Math.max(...measured) + bonus);
+  return distinct >= 2 ? Math.min(100, BASELINE_IMPORTANCE + bonus) : null;
+}
+
 export interface FeedItem {
   id: string;
   title: string;
@@ -51,6 +85,8 @@ export interface FeedItem {
   reason: string;
   metrics: { points?: number; comments?: number };
   feedback: FeedbackState;
+  /** The same story on other enabled sources, best-engaged first. Empty for a story seen on one source. */
+  alsoOn: AlsoOn[];
   /** An exploration pick: high buzz, low relevance, placed to keep the feed from becoming a bubble. */
   exploration: boolean;
 }
@@ -115,21 +151,27 @@ export async function listFeed(args: {
     .innerJoin(summaries, and(eq(summaries.itemId, items.id), eq(summaries.ownerEmail, ownerEmail)))
     .innerJoin(scores, and(eq(scores.itemId, items.id), eq(scores.ownerEmail, ownerEmail)))
     .innerJoin(sources, and(eq(sources.id, items.sourceId), eq(sources.ownerEmail, ownerEmail), eq(sources.enabled, true)))
-    .where(and(eq(items.ownerEmail, ownerEmail), ...(sourceId ? [eq(items.sourceId, sourceId)] : [])))
+    .where(and(eq(items.ownerEmail, ownerEmail), not(isRedundantMember()), ...(sourceId ? [eq(items.sourceId, sourceId)] : [])))
     .orderBy(desc(items.createdAt))
     .limit(CANDIDATE_POOL);
 
+  const clusterOf = await loadClusters(ownerEmail, rows.map((r) => r.item.id));
   const states = await getFeedbackStates(ownerEmail, rows.map((r) => r.item.id));
   const stateOf = (id: string) => states.get(id) ?? EMPTY_FEEDBACK;
 
   const ranked: FeedItem[] = rows
     .filter((r) => (view === "saved" ? stateOf(r.item.id).saved : !stateOf(r.item.id).skipped))
-    .map((r) => ({
-      r,
-      rank: rankScore(r.score.relevance, r.score.importance, recencyFactor(r.item.postedAt ?? r.item.createdAt, now), r.source.trustWeight),
-    }))
+    .map((r) => {
+      const cluster = clusterOf.get(r.item.id);
+      const importance = cluster
+        ? clusterImportance(cluster.members)
+        : hasEngagementData(r.item.rawMetrics)
+          ? r.score.importance
+          : null;
+      return { r, cluster, importance, rank: rankScore(r.score.relevance, importance ?? r.score.importance, recencyFactor(r.item.postedAt ?? r.item.createdAt, now), r.source.trustWeight) };
+    })
     .sort((a, b) => b.rank - a.rank)
-    .map(({ r }) => ({
+    .map(({ r, cluster, importance }) => ({
       id: r.item.id,
       title: r.item.title,
       url: r.item.url,
@@ -139,10 +181,11 @@ export async function listFeed(args: {
       source: { id: r.source.id, name: r.source.name, type: r.source.type, origin: r.source.origin, trustWeight: r.source.trustWeight },
       summary: { text: r.summary.summaryText, citationCount: citationCount(r.summary.citations), articleUnreadable: r.summary.inputHash === null },
       relevance: r.score.relevance,
-      importance: hasEngagementData(r.item.rawMetrics) ? r.score.importance : null,
+      importance,
       reason: r.score.reason,
       metrics: readMetrics(r.item.rawMetrics),
       feedback: stateOf(r.item.id),
+      alsoOn: cluster?.alsoOn ?? [],
       exploration: false,
     }));
 
@@ -151,6 +194,54 @@ export async function listFeed(args: {
     items: view === "feed" ? applyExploration(ranked, limit) : ranked.slice(0, limit),
     progress: await feedProgress(ownerEmail),
   };
+}
+
+interface ClusterInfo {
+  members: ClusterMember[];
+  alsoOn: AlsoOn[];
+}
+
+/**
+ * For each of the given items that is the canonical item of a cluster, the
+ * cluster's members: all of them (for importance) and the ones on other enabled
+ * sources (for the "also on" list, deduplicated by source, best engagement first).
+ */
+async function loadClusters(ownerEmail: string, itemIds: string[]): Promise<Map<string, ClusterInfo>> {
+  const db = getDb();
+  const out = new Map<string, ClusterInfo>();
+  for (let i = 0; i < itemIds.length; i += 100) {
+    const canonical = await db
+      .select({ id: clusters.id, canonicalItemId: clusters.canonicalItemId })
+      .from(clusters)
+      .where(and(eq(clusters.ownerEmail, ownerEmail), inArray(clusters.canonicalItemId, itemIds.slice(i, i + 100))));
+    if (canonical.length === 0) continue;
+    const members = await db
+      .select({ clusterId: clusterItems.clusterId, item: items, source: sources })
+      .from(clusterItems)
+      .innerJoin(items, and(eq(items.id, clusterItems.itemId), eq(items.ownerEmail, ownerEmail)))
+      .innerJoin(sources, and(eq(sources.id, items.sourceId), eq(sources.ownerEmail, ownerEmail), eq(sources.enabled, true)))
+      .where(and(eq(clusterItems.ownerEmail, ownerEmail), inArray(clusterItems.clusterId, canonical.map((c) => c.id))));
+
+    for (const c of canonical) {
+      const rows = members.filter((m) => m.clusterId === c.id);
+      const own = rows.find((m) => m.item.id === c.canonicalItemId);
+      const bySource = new Map<string, AlsoOn & { points: number }>();
+      for (const m of rows) {
+        if (m.item.id === c.canonicalItemId || m.source.id === own?.source.id) continue;
+        const metrics = readMetrics(m.item.rawMetrics);
+        const prior = bySource.get(m.source.id);
+        const points = metrics.points ?? 0;
+        if (!prior || points > prior.points) {
+          bySource.set(m.source.id, { source: { id: m.source.id, name: m.source.name, type: m.source.type }, url: m.item.url, discussionUrl: m.item.discussionUrl, metrics, points });
+        }
+      }
+      out.set(c.canonicalItemId, {
+        members: rows.map((m) => ({ sourceId: m.source.id, sourceType: m.source.type, rawMetrics: m.item.rawMetrics })),
+        alsoOn: [...bySource.values()].sort((a, b) => b.points - a.points).map(({ points: _points, ...rest }) => rest),
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -184,7 +275,7 @@ export function applyExploration(ranked: FeedItem[], limit: number): FeedItem[] 
 /** How much of the pipeline is still pending, for items from enabled sources. */
 export async function feedProgress(ownerEmail: string): Promise<FeedProgress> {
   const db = getDb();
-  const enabled = and(eq(items.ownerEmail, ownerEmail), eq(sources.enabled, true));
+  const enabled = and(eq(items.ownerEmail, ownerEmail), eq(sources.enabled, true), not(isRedundantMember()));
   const base = () =>
     db
       .select({ n: count() })

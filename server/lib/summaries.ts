@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { fail } from "@agent-native/core/action";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, not } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
+import { isRedundantMember } from "./cluster.js";
 
 const { items, summaries } = schema;
 
@@ -105,7 +106,7 @@ export async function listPendingSummaries(ownerEmail: string, limit: number) {
     })
     .from(items)
     .leftJoin(summaries, and(eq(summaries.itemId, items.id), eq(summaries.ownerEmail, ownerEmail)))
-    .where(and(eq(items.ownerEmail, ownerEmail), inArray(items.fetchStatus, ["ok", "failed", "paywalled"])))
+    .where(and(eq(items.ownerEmail, ownerEmail), inArray(items.fetchStatus, ["ok", "failed", "paywalled"]), not(isRedundantMember())))
     .orderBy(desc(items.postedAt), desc(items.createdAt))
     .limit(limit * 4);
 

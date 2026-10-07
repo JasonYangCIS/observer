@@ -46,7 +46,7 @@ function fake(id: string, relevance: number, importance: number | null): TestFee
   return {
     id, title: id, url: `https://x.example.com/${id}`, discussionUrl: null, author: null, postedAt: null,
     source: { id: "s", name: "S", type: "hn", origin: "user", trustWeight: 1 }, summary: { text: "s", citationCount: 1, articleUnreadable: false },
-    relevance, importance, reason: "r", metrics: {}, feedback: { liked: false, skipped: false, saved: false, opened: false }, exploration: false,
+    relevance, importance, reason: "r", metrics: {}, feedback: { liked: false, skipped: false, saved: false, opened: false }, alsoOn: [], exploration: false,
   };
 }
 /** 12 ranked items: relevant ones first, then two high-buzz low-relevance candidates near the bottom. */
