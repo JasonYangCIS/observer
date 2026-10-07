@@ -1,8 +1,9 @@
 import { useT } from "@agent-native/core/client/i18n";
-import { actionErrorMessage, useActionQuery } from "@agent-native/core/client/hooks";
+import { actionErrorMessage, useActionMutation, useActionQuery } from "@agent-native/core/client/hooks";
 import { sendToAgentChat } from "@agent-native/core/client/agent-chat";
 import { useSetPageTitle } from "@agent-native/toolkit/app-shell";
 import { Link } from "react-router";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { APP_TITLE } from "@/lib/app-config";
@@ -119,6 +120,93 @@ function FeedCard({ item }: { item: FeedItem }) {
   );
 }
 
+interface DailyUpdate {
+  configured: boolean;
+  enabled: boolean;
+  hour: number;
+  timezone: string;
+  nextRun: string | null;
+  lastRun: string | null;
+  lastStatus: string | null;
+  lastError: string | null;
+}
+
+function hourLabel(hour: number): string {
+  return new Date(2000, 0, 1, hour).toLocaleTimeString(undefined, { hour: "numeric" });
+}
+
+/** Turn the daily automation on or off and pick its hour; shows how the last run went. */
+function DailyUpdateRow() {
+  const t = useT();
+  const { data } = useActionQuery("get-daily-update", {});
+  const save = useActionMutation("set-daily-update");
+  const status: DailyUpdate | undefined = data;
+  if (!status) return null;
+
+  const change = (vars: { enabled: boolean; hour?: number }) =>
+    save.mutate(
+      {
+        ...vars,
+        // A first-time setup uses the browser's zone; later changes keep the saved one.
+        ...(status.configured ? {} : { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+      },
+      { onError: (err) => toast.error(actionErrorMessage(err) ?? t("feed.daily.saveFailed")) },
+    );
+
+  const lastRun = status.lastRun ? relativeTime(status.lastRun) : null;
+  const next = status.enabled && status.nextRun ? relativeTime(status.nextRun) : null;
+
+  return (
+    <div className="mt-4 rounded-lg border border-border px-4 py-3 text-sm">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="font-medium">{t("feed.daily.title")}</span>
+        {status.enabled ? (
+          <>
+            <span className="text-muted-foreground">{t("feed.daily.on")}</span>
+            <select
+              aria-label={t("feed.daily.hourLabel")}
+              value={status.hour}
+              disabled={save.isPending}
+              onChange={(e) => change({ enabled: true, hour: Number(e.target.value) })}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>
+                  {hourLabel(h)}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-muted-foreground">{t("feed.daily.timezoneNote", { timezone: status.timezone })}</span>
+          </>
+        ) : (
+          <span className="flex-1 text-muted-foreground">{t("feed.daily.off")}</span>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          className="ms-auto"
+          disabled={save.isPending}
+          onClick={() => change({ enabled: !status.enabled })}
+        >
+          {status.enabled ? t("feed.daily.turnOff") : t("feed.daily.turnOn")}
+        </Button>
+      </div>
+      {status.configured ? (
+        <p className={`mt-2 text-xs ${status.lastStatus === "error" ? "text-destructive" : "text-muted-foreground"}`}>
+          {status.lastRun
+            ? status.lastStatus === "error"
+              ? t("feed.daily.lastFailed", { time: lastRun ?? "", error: status.lastError ?? "" })
+              : status.lastStatus === "success"
+                ? t("feed.daily.lastOk", { time: lastRun ?? "" })
+                : t("feed.daily.lastOther", { time: lastRun ?? "", status: status.lastStatus ?? "" })
+            : t("feed.daily.neverRan")}
+          {next ? ` · ${t("feed.daily.next", { time: next })}` : ""}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function FeedPage() {
   const t = useT();
   useSetPageTitle(t("feed.title"));
@@ -145,6 +233,8 @@ export default function FeedPage() {
           </Button>
         ) : null}
       </div>
+
+      <DailyUpdateRow />
 
       {waiting > 0 ? (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-muted px-4 py-3 text-sm" role="status">
