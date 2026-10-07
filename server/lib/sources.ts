@@ -1,11 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { fail } from "@agent-native/core/action";
 import { and, count, eq, inArray } from "drizzle-orm";
+import { XMLParser } from "fast-xml-parser";
 import { getDb, schema } from "../db/index.js";
 
 const { sources, sourceSettings, items, summaries, scores, runs, feedback } = schema;
 
-export type SourceKind = "hn" | "rss";
+export const SOURCE_KINDS = ["hn", "rss", "lobsters", "devto", "github", "reddit", "producthunt"] as const;
+export type SourceKind = (typeof SOURCE_KINDS)[number];
+
+/** Most sources one user can have. Each is fetched on every update, so this bounds cost. */
+export const MAX_SOURCES = 50;
 
 export interface SourceView {
   id: string;
@@ -94,55 +99,204 @@ export async function ensureSourceSettings(ownerEmail: string, orgId: string | n
     .onConflictDoNothing({ target: sourceSettings.ownerEmail });
 }
 
-export async function addSource(args: {
+export interface AddSourceArgs {
   ownerEmail: string;
   orgId: string | null;
   type: SourceKind;
   name?: string;
+  /** Feed URL, for type "rss". */
   url?: string;
+  /** Stories or items per fetch, for the API sources. */
   limit?: number;
-}): Promise<SourceView> {
-  const { ownerEmail, orgId, type } = args;
-  const db = getDb();
-  const existing = await db.select().from(sources).where(eq(sources.ownerEmail, ownerEmail));
+  /** Subreddit name without "r/", for type "reddit". */
+  subreddit?: string;
+  /** dev.to tag, for type "devto" (optional). */
+  tag?: string;
+  /** GitHub language, for type "github" (optional). */
+  language?: string;
+}
 
-  let config: Record<string, unknown>;
-  let name: string;
-  let connector: string;
-  if (type === "hn") {
-    if (existing.some((s) => s.type === "hn")) {
-      fail("Hacker News is already added", { errorCode: "duplicate", statusCode: 409 });
+interface SourceDraft {
+  type: SourceKind;
+  connector: "api" | "feed";
+  name: string;
+  config: Record<string, unknown>;
+  /** What makes two sources the same one, for duplicate detection. */
+  identity: string;
+}
+
+/**
+ * Validate the user's input for a new source and turn it into the row to store.
+ * Every value that ends up in a URL or API query is checked against a strict
+ * pattern first, so user input can't redirect a fetch somewhere unintended.
+ *
+ * @throws invalid_input, invalid_url.
+ */
+export function draftSource(args: Omit<AddSourceArgs, "ownerEmail" | "orgId">): SourceDraft {
+  const limit = args.limit ? { limit: args.limit } : {};
+  const custom = args.name?.trim();
+  switch (args.type) {
+    case "hn":
+      return { type: "hn", connector: "api", name: custom || "Hacker News", config: limit, identity: "hn" };
+    case "lobsters":
+      return { type: "lobsters", connector: "api", name: custom || "Lobsters", config: limit, identity: "lobsters" };
+    case "producthunt":
+      return { type: "producthunt", connector: "feed", name: custom || "Product Hunt", config: { url: "https://www.producthunt.com/feed" }, identity: "producthunt" };
+    case "devto": {
+      const tag = args.tag?.trim().toLowerCase().replace(/^#/, "") || undefined;
+      if (tag && !/^[a-z0-9]{1,30}$/.test(tag)) fail("A dev.to tag is letters and numbers only (for example webdev).", { errorCode: "invalid_input" });
+      return { type: "devto", connector: "api", name: custom || (tag ? `dev.to #${tag}` : "dev.to"), config: { ...limit, ...(tag ? { tag } : {}) }, identity: `devto:${tag ?? ""}` };
     }
-    connector = "api";
-    name = args.name?.trim() || "Hacker News";
-    config = args.limit ? { limit: args.limit } : {};
-  } else {
-    if (!args.url) fail("A feed URL is required for RSS/Atom sources", { errorCode: "invalid_input" });
-    const url = normalizeFeedUrl(args.url);
-    if (existing.some((s) => s.type === "rss" && readConfig(s.config).url === url)) {
-      fail("That feed is already added", { errorCode: "duplicate", statusCode: 409 });
+    case "github": {
+      const language = args.language?.trim() || undefined;
+      if (language && !/^[A-Za-z0-9+#.-]{1,30}$/.test(language)) fail("That doesn't look like a programming language name.", { errorCode: "invalid_input" });
+      return { type: "github", connector: "api", name: custom || (language ? `GitHub new repos (${language})` : "GitHub new repos"), config: { ...limit, ...(language ? { language } : {}) }, identity: `github:${language?.toLowerCase() ?? ""}` };
     }
-    connector = "feed";
-    name = args.name?.trim() || new URL(url).hostname;
-    config = { url };
+    case "reddit": {
+      const sub = args.subreddit?.trim().replace(/^\/?r\//i, "");
+      if (!sub) fail("A subreddit name is required.", { errorCode: "invalid_input" });
+      if (!/^[A-Za-z0-9_]{2,21}$/.test(sub)) fail("A subreddit name is 2-21 letters, numbers, or underscores.", { errorCode: "invalid_input" });
+      return { type: "reddit", connector: "feed", name: custom || `r/${sub}`, config: { url: `https://www.reddit.com/r/${sub}/.rss` }, identity: `reddit:${sub.toLowerCase()}` };
+    }
+    case "rss": {
+      if (!args.url) fail("A feed URL is required for RSS/Atom sources", { errorCode: "invalid_input" });
+      const url = normalizeFeedUrl(args.url);
+      return { type: "rss", connector: "feed", name: custom || new URL(url).hostname, config: { url }, identity: `rss:${url}` };
+    }
   }
+}
 
-  await ensureSourceSettings(ownerEmail, orgId);
+/** The identity `draftSource` would give an already-stored source. */
+function identityOf(row: typeof sources.$inferSelect): string {
+  const cfg = readConfig(row.config) as { tag?: unknown; language?: unknown; url?: unknown };
+  switch (row.type) {
+    case "devto": return `devto:${typeof cfg.tag === "string" ? cfg.tag : ""}`;
+    case "github": return `github:${typeof cfg.language === "string" ? cfg.language.toLowerCase() : ""}`;
+    case "reddit": {
+      const sub = typeof cfg.url === "string" ? /\/r\/([^/]+)\//i.exec(cfg.url)?.[1] : undefined;
+      return `reddit:${(sub ?? "").toLowerCase()}`;
+    }
+    case "rss": return `rss:${typeof cfg.url === "string" ? cfg.url : ""}`;
+    default: return row.type;
+  }
+}
+
+async function insertSource(ownerEmail: string, orgId: string | null, draft: SourceDraft): Promise<string> {
   const id = randomUUID();
-  await db.insert(sources).values({
+  await getDb().insert(sources).values({
     id,
     ownerEmail,
     orgId,
-    type,
-    connector,
-    name: name.slice(0, 120),
-    config: JSON.stringify(config),
+    type: draft.type,
+    connector: draft.connector,
+    name: draft.name.slice(0, 120),
+    config: JSON.stringify(draft.config),
     origin: "user",
     status: "approved",
     trustWeight: 1,
   });
-  const [row] = await db.select().from(sources).where(eq(sources.id, id));
+  return id;
+}
+
+/**
+ * Add one source the user chose. Rejects a duplicate (same service and settings)
+ * and refuses to go past `MAX_SOURCES`.
+ *
+ * @throws invalid_input, invalid_url, duplicate, source_limit.
+ */
+export async function addSource(args: AddSourceArgs): Promise<SourceView> {
+  const { ownerEmail, orgId, ...input } = args;
+  const draft = draftSource(input);
+  const existing = await getDb().select().from(sources).where(eq(sources.ownerEmail, ownerEmail));
+  if (existing.length >= MAX_SOURCES) fail(`You can have up to ${MAX_SOURCES} sources. Remove one first.`, { errorCode: "source_limit", statusCode: 409 });
+  if (existing.some((row) => identityOf(row) === draft.identity)) fail("That source is already added", { errorCode: "duplicate", statusCode: 409 });
+
+  await ensureSourceSettings(ownerEmail, orgId);
+  const id = await insertSource(ownerEmail, orgId, draft);
+  const [row] = await getDb().select().from(sources).where(eq(sources.id, id));
   return toView(row, 0);
+}
+
+export interface OpmlResult {
+  added: number;
+  skippedDuplicate: number;
+  skippedInvalid: number;
+  skippedOverLimit: number;
+  /** Names of the first few feeds that were added. */
+  addedNames: string[];
+}
+
+const OPML_MAX_FEEDS = 100;
+const opmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
+
+/** Every outline with an `xmlUrl` in an OPML document (outlines nest, so walk them all). */
+export function parseOpml(xml: string): { url: string; title?: string }[] {
+  let doc: { opml?: { body?: unknown } };
+  try {
+    doc = opmlParser.parse(xml);
+  } catch {
+    fail("That file isn't valid OPML.", { errorCode: "invalid_opml" });
+  }
+  if (!doc?.opml?.body) fail("That file isn't valid OPML (no <opml><body> found).", { errorCode: "invalid_opml" });
+
+  const found: { url: string; title?: string }[] = [];
+  const walk = (node: unknown) => {
+    if (found.length >= OPML_MAX_FEEDS * 2) return;
+    for (const item of Array.isArray(node) ? node : [node]) {
+      if (!item || typeof item !== "object") continue;
+      const outline = item as Record<string, unknown>;
+      const url = outline["@_xmlUrl"] ?? outline["@_xmlurl"];
+      if (typeof url === "string") {
+        const title = outline["@_title"] ?? outline["@_text"];
+        found.push({ url, title: typeof title === "string" ? title : undefined });
+      }
+      if (outline.outline) walk(outline.outline);
+    }
+  };
+  walk((doc.opml.body as Record<string, unknown>).outline);
+  return found;
+}
+
+/**
+ * Add every feed in an OPML export as an RSS source. Feeds already added,
+ * invalid or non-http(s) URLs, and anything over the source cap are skipped, never
+ * fatal, and counted in the result so nothing disappears silently.
+ *
+ * @throws invalid_opml when the file can't be read as OPML.
+ */
+export async function importOpml(args: { ownerEmail: string; orgId: string | null; opml: string }): Promise<OpmlResult> {
+  const { ownerEmail, orgId } = args;
+  const result: OpmlResult = { added: 0, skippedDuplicate: 0, skippedInvalid: 0, skippedOverLimit: 0, addedNames: [] };
+  const feeds = parseOpml(args.opml);
+  const existing = await getDb().select().from(sources).where(eq(sources.ownerEmail, ownerEmail));
+  const known = new Set(existing.map(identityOf));
+  let total = existing.length;
+  if (feeds.length > 0) await ensureSourceSettings(ownerEmail, orgId);
+
+  for (const feed of feeds.slice(0, OPML_MAX_FEEDS)) {
+    let draft: SourceDraft;
+    try {
+      draft = draftSource({ type: "rss", url: feed.url, name: feed.title });
+    } catch {
+      result.skippedInvalid++;
+      continue;
+    }
+    if (known.has(draft.identity)) {
+      result.skippedDuplicate++;
+      continue;
+    }
+    if (total >= MAX_SOURCES) {
+      result.skippedOverLimit++;
+      continue;
+    }
+    await insertSource(ownerEmail, orgId, draft);
+    known.add(draft.identity);
+    total++;
+    result.added++;
+    if (result.addedNames.length < 10) result.addedNames.push(draft.name);
+  }
+  result.skippedOverLimit += Math.max(0, feeds.length - OPML_MAX_FEEDS);
+  return result;
 }
 
 export async function updateSource(args: {

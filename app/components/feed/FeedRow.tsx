@@ -185,7 +185,7 @@ export function FeedRow({
           <span>{item.source.origin === "user" ? t("feed.trusted") : t("feed.discovered")}</span>
           {posted ? <>{dot}<span>{posted}</span></> : null}
           {item.author ? <>{dot}<span>{t("feed.by", { author: item.author })}</span></> : null}
-          {item.metrics.points !== undefined ? <>{dot}<span>{t("feed.points", { count: item.metrics.points })}</span></> : null}
+          {item.metrics.points !== undefined ? <>{dot}<span>{t(item.source.type === "github" ? "feed.stars" : item.source.type === "devto" ? "feed.reactions" : "feed.points", { count: item.metrics.points })}</span></> : null}
           {discussionHref ? (
             <>
               {dot}

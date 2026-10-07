@@ -1,4 +1,5 @@
 import type { Connector, NormalizedItem } from "./types.js";
+import { configLimit, isHttpUrl } from "./util.js";
 
 const HN_API = "https://hacker-news.firebaseio.com/v0";
 const DEFAULT_LIMIT = 30;
@@ -18,17 +19,6 @@ interface HnItem {
   deleted?: boolean;
 }
 
-/** True for absolute http(s) URLs. Story links come from the open web, so anything else is dropped. */
-function isHttpUrl(value: string | undefined): value is string {
-  if (!value) return false;
-  try {
-    const { protocol } = new URL(value);
-    return protocol === "http:" || protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
 export function mapHnItem(raw: HnItem): NormalizedItem | null {
   if (!raw || raw.dead || raw.deleted || !raw.title) return null;
   if (raw.type && raw.type !== "story") return null;
@@ -42,16 +32,6 @@ export function mapHnItem(raw: HnItem): NormalizedItem | null {
     postedAt: raw.time ? new Date(raw.time * 1000).toISOString() : undefined,
     metrics: { points: raw.score ?? 0, comments: raw.descendants ?? 0 },
   };
-}
-
-function parseLimit(config: string): number {
-  try {
-    const n = Number(JSON.parse(config)?.limit);
-    if (Number.isFinite(n) && n > 0) return Math.min(Math.floor(n), MAX_LIMIT);
-  } catch {
-    // fall through to the default
-  }
-  return DEFAULT_LIMIT;
 }
 
 /** Hacker News official API (top stories). */
@@ -70,7 +50,7 @@ export const hnConnector: Connector = {
 
     const ids: unknown = await get("/topstories.json");
     if (!Array.isArray(ids)) throw new Error("Unexpected Hacker News response");
-    const wanted = ids.filter((x): x is number => Number.isInteger(x)).slice(0, parseLimit(source.config));
+    const wanted = ids.filter((x): x is number => Number.isInteger(x)).slice(0, configLimit(source.config, DEFAULT_LIMIT, MAX_LIMIT));
 
     const out: NormalizedItem[] = [];
     for (let i = 0; i < wanted.length; i += CONCURRENCY) {
