@@ -153,3 +153,7 @@ vite.config.ts.timestamp-*
 # Local dev database (PGlite)
 /data/pglite/
 /data/pglite.agent-native-pglite.lock
+
+# Local dev secrets and generated output
+.agent-native/
+.react-router/
