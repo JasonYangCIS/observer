@@ -4,9 +4,8 @@ import { useSetPageTitle } from "@agent-native/toolkit/app-shell";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { AddSourceForm, type AddPayload } from "@/components/sources/AddSourceForm";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { APP_TITLE } from "@/lib/app-config";
 
 export function meta() {
@@ -49,22 +48,26 @@ export default function SourcesPage() {
   const manage = useActionMutation("manage-sources");
   const fetchSource = useActionMutation("fetch-source");
 
-  const [kind, setKind] = useState<"hn" | "rss">("rss");
-  const [url, setUrl] = useState("");
+  const importOpml = useActionMutation("import-opml");
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null);
 
   const sources: SourceView[] = data?.sources ?? [];
-  const hasHn = sources.some((s) => s.type === "hn");
 
-  const addSource = (type: "hn" | "rss", feedUrl?: string) =>
-    manage.mutate(
-      { operation: "add", type, ...(feedUrl ? { url: feedUrl } : {}) },
+  const addSource = (payload: AddPayload) =>
+    manage.mutate(payload, {
+      onSuccess: () => toast.success(t("sources.added")),
+      onError: (err) => toast.error(actionErrorMessage(err) ?? t("sources.addFailed")),
+    });
+
+  const importFeeds = (opml: string) =>
+    importOpml.mutate(
+      { opml },
       {
-        onSuccess: () => {
-          toast.success(t("sources.added"));
-          setUrl("");
+        onSuccess: (r: { added: number; skippedDuplicate: number; skippedInvalid: number; skippedOverLimit: number }) => {
+          const skipped = r.skippedDuplicate + r.skippedInvalid + r.skippedOverLimit;
+          toast.success(t("sources.imported", { added: r.added, skipped }));
         },
-        onError: (err) => toast.error(actionErrorMessage(err) ?? t("sources.addFailed")),
+        onError: (err) => toast.error(actionErrorMessage(err) ?? t("sources.importFailed")),
       },
     );
 
@@ -101,53 +104,13 @@ export default function SourcesPage() {
       <h1 className="text-xl font-semibold">{t("sources.title")}</h1>
       <p className="mt-1 text-sm text-muted-foreground">{t("sources.description")}</p>
 
-      <form
-        className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (kind === "rss" && !url.trim()) return;
-          addSource(kind, kind === "rss" ? url.trim() : undefined);
-        }}
-        aria-label={t("sources.addTitle")}
-      >
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="source-kind">{t("sources.typeLabel")}</Label>
-          <select
-            id="source-kind"
-            value={kind}
-            onChange={(e) => setKind(e.target.value as "hn" | "rss")}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="rss">{t("sources.typeRss")}</option>
-            <option value="hn" disabled={hasHn}>
-              {t("sources.typeHn")}
-            </option>
-          </select>
-        </div>
-        {kind === "rss" ? (
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <Label htmlFor="source-url">{t("sources.urlLabel")}</Label>
-            <Input
-              id="source-url"
-              type="url"
-              inputMode="url"
-              required
-              value={url}
-              placeholder={t("sources.urlPlaceholder")}
-              aria-describedby="source-url-hint"
-              onChange={(e) => setUrl(e.target.value)}
-            />
-            <p id="source-url-hint" className="text-xs text-muted-foreground">
-              {t("sources.urlHint")}
-            </p>
-          </div>
-        ) : (
-          <div className="flex-1" />
-        )}
-        <Button type="submit" disabled={manage.isPending && manage.variables?.operation === "add"}>
-          {manage.isPending && manage.variables?.operation === "add" ? t("sources.adding") : t("sources.add")}
-        </Button>
-      </form>
+      <AddSourceForm
+        existingTypes={sources.map((s) => s.type)}
+        pending={manage.isPending && manage.variables?.operation === "add"}
+        onAdd={addSource}
+        onImportOpml={importFeeds}
+        importing={importOpml.isPending}
+      />
 
       <section className="mt-8" aria-live="polite">
         {isLoading ? (
@@ -162,7 +125,7 @@ export default function SourcesPage() {
           <div className="rounded-lg border border-dashed border-border p-8 text-center">
             <h2 className="text-sm font-medium">{t("sources.emptyTitle")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{t("sources.emptyDescription")}</p>
-            <Button className="mt-4" variant="outline" onClick={() => addSource("hn")} disabled={manage.isPending}>
+            <Button className="mt-4" variant="outline" onClick={() => addSource({ operation: "add", type: "hn" })} disabled={manage.isPending}>
               {t("sources.addHn")}
             </Button>
           </div>
@@ -176,7 +139,7 @@ export default function SourcesPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate text-sm font-medium">{s.name}</span>
                       <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                        {s.type === "hn" ? t("sources.kindHn") : t("sources.kindRss")}
+                        {t(`sources.kind.${s.type}`, { defaultValue: t("sources.kind.rss") })}
                       </span>
                       {s.origin === "user" ? (
                         <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">

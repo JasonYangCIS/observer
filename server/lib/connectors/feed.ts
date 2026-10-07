@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import type { Connector, NormalizedItem } from "./types.js";
+import { isHttpUrl } from "./util.js";
 
 const MAX_ITEMS = 100;
 
@@ -59,8 +60,28 @@ function httpUrl(u: string | undefined): string | undefined {
   }
 }
 
+const REDDIT_HOST = /(^|\.)(reddit\.com|redd\.it)$/i;
+
+/**
+ * The article a Reddit post links to, from the "[link]" anchor in the entry's HTML
+ * content. Self posts and Reddit-hosted media link back to Reddit and return
+ * undefined, so those keep the thread as their URL.
+ */
+export function redditExternalLink(contentHtml: string | undefined): string | undefined {
+  const match = contentHtml ? /<a\s+href="([^"]+)">\[link\]<\/a>/.exec(contentHtml) : null;
+  if (!match) return undefined;
+  const href = match[1].replace(/&amp;/g, "&");
+  if (!isHttpUrl(href)) return undefined;
+  return REDDIT_HOST.test(new URL(href).hostname) ? undefined : href;
+}
+
+export interface ParseFeedOptions {
+  /** Reddit Atom feeds: use the linked article as the item URL and the thread as the discussion. */
+  reddit?: boolean;
+}
+
 /** Parse RSS 2.0 or Atom 1.0 into normalized items. Throws on unrecognized XML. */
-export function parseFeed(xml: string): NormalizedItem[] {
+export function parseFeed(xml: string, options: ParseFeedOptions = {}): NormalizedItem[] {
   const doc = parser.parse(xml);
   const out: NormalizedItem[] = [];
 
@@ -87,9 +108,11 @@ export function parseFeed(xml: string): NormalizedItem[] {
       const url = httpUrl(atomLink(e.link));
       const title = text(e.title);
       if (!url || !title) continue;
+      const external = options.reddit ? redditExternalLink(text(e.content)) : undefined;
       out.push({
         externalId: text(e.id) ?? url,
-        url,
+        url: external ?? url,
+        ...(external ? { discussionUrl: url } : {}),
         title,
         author: text(e.author?.name),
         postedAt: toIso(e.published) ?? toIso(e.updated),
@@ -120,6 +143,6 @@ export const feedConnector: Connector = {
       accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5",
       policy: ctx.policy,
     });
-    return parseFeed(res.text);
+    return parseFeed(res.text, { reddit: source.type === "reddit" });
   },
 };
