@@ -96,6 +96,8 @@ const messages = {
     relevanceTitle: "Relevance {{value}}",
     relShort: "rel",
     by: "by {{author}}",
+    exploration: "outside your usual interests",
+    explorationHint: "Included on purpose: it is getting a lot of attention but doesn't match your interests, so the feed doesn't become a bubble.",
     like: "like",
     liked: "liked",
     skip: "skip",

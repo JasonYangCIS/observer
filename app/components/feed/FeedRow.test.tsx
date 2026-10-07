@@ -32,6 +32,7 @@ const item: FeedItem = {
   reason: "Covers edge rendering. Matched: web development. Buzz: 51 points.",
   metrics: { points: 51, comments: 14 },
   feedback: { liked: false, skipped: false, saved: false, opened: false },
+  exploration: false,
 };
 const html = (over: Partial<FeedItem> = {}, props: { defaultOpen?: boolean } = {}) =>
   renderToStaticMarkup(<FeedRow item={{ ...item, ...over }} rank={3} {...props} />);
@@ -88,6 +89,15 @@ describe("FeedRow", () => {
     expect(out).toContain("Article couldn&#x27;t be read");
     expect(out).toContain(">Discussion<");
     expect(out).not.toMatch(/<span>\d+ points<\/span>/); // the reason text in the tooltip may still mention points
+  });
+});
+
+describe("exploration tag", () => {
+  it("labels deliberate exploration picks and nothing else", () => {
+    const tagged = html({ exploration: true });
+    expect(tagged).toContain("outside your usual interests");
+    expect(tagged).toContain("Included on purpose");
+    expect(html()).not.toContain("outside your usual interests");
   });
 });
 
