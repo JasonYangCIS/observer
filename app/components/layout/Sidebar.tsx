@@ -22,6 +22,7 @@ import {
   IconLoader2,
   IconMessages,
   IconPin,
+  IconRss,
   IconSearch,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -437,6 +438,34 @@ function ChatThreadsSection({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+function SourcesNavLink({ collapsed }: { collapsed: boolean }) {
+  const t = useT();
+  const location = useLocation();
+  const active = location.pathname.startsWith("/sources");
+  const link = (
+    <Link
+      to="/sources"
+      aria-current={active ? "page" : undefined}
+      aria-label={collapsed ? t("navigation.sources") : undefined}
+      className={cn(
+        "flex items-center rounded-md text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+        collapsed ? "size-8 justify-center" : "mx-2 gap-2 px-2 py-1.5",
+        active && "bg-sidebar-accent text-sidebar-accent-foreground",
+      )}
+    >
+      <IconRss className="size-4 shrink-0" strokeWidth={1.8} />
+      {collapsed ? null : <span>{t("navigation.sources")}</span>}
+    </Link>
+  );
+  if (!collapsed) return <div className="pb-2">{link}</div>;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{link}</TooltipTrigger>
+      <TooltipContent side="right">{t("navigation.sources")}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function Sidebar({
   collapsed = false,
   collapsible = true,
@@ -540,6 +569,7 @@ export function Sidebar({
           collapsed ? "items-center gap-1 px-1 py-2" : "pt-1",
         )}
       >
+        <SourcesNavLink collapsed={collapsed} />
         <ChatThreadsSection collapsed={collapsed} />
       </nav>
 

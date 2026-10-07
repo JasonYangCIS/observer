@@ -1,6 +1,8 @@
 import { defineAction } from "@agent-native/core/action";
 import { readAppState } from "@agent-native/core/application-state";
+import { getRequestUserEmail } from "@agent-native/core/server";
 import { z } from "zod";
+import { listSources } from "../server/lib/sources.js";
 
 export default defineAction({
   description:
@@ -13,6 +15,11 @@ export default defineAction({
 
     const screen: Record<string, unknown> = {};
     if (navigation) screen.navigation = navigation;
+
+    if ((navigation as { view?: string } | null)?.view === "sources") {
+      const ownerEmail = getRequestUserEmail();
+      if (ownerEmail) screen.sources = await listSources(ownerEmail);
+    }
 
     if (Object.keys(screen).length === 0) {
       return "No application state found. Is the app running?";
