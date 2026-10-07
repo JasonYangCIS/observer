@@ -1,6 +1,8 @@
 [build]
 command = "NITRO_PRESET=netlify pnpm build && if [ \"${CONTEXT:-}\" = \"production\" ]; then DATABASE_URL=\"${MIGRATION_DATABASE_URL:?set MIGRATION_DATABASE_URL to the Supabase direct/session URL}\" pnpm migrate:production; fi"
 publish = "dist"
+# Skip builds that cannot change the deployed app (docs, tests, CI). See scripts/netlify-ignore.sh.
+ignore = "bash scripts/netlify-ignore.sh"
 functions = ".netlify/functions-internal"
 
 [build.environment]
