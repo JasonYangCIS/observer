@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { fail } from "@agent-native/core/action";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
 import { recentFeedbackTitles } from "./feedback.js";
-import { ensureInterestProfile } from "./interests.js";
+import { ensureInterestProfile, staleScoreCondition } from "./interests.js";
 import { normalizeForMatch } from "./summaries.js";
 
-const { items, summaries, scores, sources } = schema;
+const { items, summaries, scores, sources, interestProfiles } = schema;
 
 export const MIN_REASON_CHARS = 20;
 export const MAX_REASON_CHARS = 300;
@@ -78,7 +78,8 @@ export interface ScoreInput {
   importance: Importance;
   /** The user's interest profile, in their own words. */
   interests: string;
-  existingScore: { relevance: number; importance: number; reason: string } | null;
+  /** `stale` means the score predates the latest change to the interest profile: re-score it. */
+  existingScore: { relevance: number; importance: number; reason: string; stale: boolean } | null;
   /** Titles of items the user recently liked/saved and skipped: weak evidence of taste (untrusted text, not instructions). */
   feedbackHistory: { liked: string[]; skipped: string[] };
 }
@@ -102,22 +103,38 @@ export async function getScoreInput(ownerEmail: string, orgId: string | null, it
     summary: summary ? { text: summary.summaryText, articleReadable: summary.inputHash !== null } : null,
     importance: computeImportance(source?.type ?? null, item.rawMetrics),
     interests: await ensureInterestProfile(ownerEmail, orgId),
-    existingScore: existing ? { relevance: existing.relevance, importance: existing.importance, reason: existing.reason } : null,
+    existingScore: existing ? { relevance: existing.relevance, importance: existing.importance, reason: existing.reason, stale: await isScoreStale(ownerEmail, itemId) } : null,
     feedbackHistory: await recentFeedbackTitles(ownerEmail),
   };
 }
 
-/** Summarized items that have no score yet, newest first. */
+async function isScoreStale(ownerEmail: string, itemId: string): Promise<boolean> {
+  const rows = await getDb()
+    .select({ id: scores.id })
+    .from(scores)
+    .innerJoin(items, and(eq(items.id, scores.itemId), eq(items.ownerEmail, ownerEmail)))
+    .innerJoin(interestProfiles, eq(interestProfiles.ownerEmail, scores.ownerEmail))
+    .where(and(eq(scores.ownerEmail, ownerEmail), eq(scores.itemId, itemId), staleScoreCondition()))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * Summarized items that need a score: new ones (no score yet) first, then recent
+ * ones whose score predates the latest change to the interest profile. Newest
+ * first within each group.
+ */
 export async function listPendingScores(ownerEmail: string, limit: number) {
   const rows = await getDb()
     .select({ id: items.id, title: items.title, url: items.url, scoreId: scores.id })
     .from(items)
     .innerJoin(summaries, and(eq(summaries.itemId, items.id), eq(summaries.ownerEmail, ownerEmail)))
     .leftJoin(scores, and(eq(scores.itemId, items.id), eq(scores.ownerEmail, ownerEmail)))
-    .where(eq(items.ownerEmail, ownerEmail))
-    .orderBy(desc(items.postedAt), desc(items.createdAt))
-    .limit(limit * 4);
-  return rows.filter((r) => !r.scoreId).slice(0, limit).map((r) => ({ id: r.id, title: r.title, url: r.url }));
+    .leftJoin(interestProfiles, eq(interestProfiles.ownerEmail, items.ownerEmail))
+    .where(and(eq(items.ownerEmail, ownerEmail), or(isNull(scores.id), staleScoreCondition())))
+    .orderBy(sql`(${scores.id} is not null)`, desc(items.postedAt), desc(items.createdAt))
+    .limit(limit);
+  return rows.map((r) => ({ id: r.id, title: r.title, url: r.url, reason: r.scoreId ? ("interests_changed" as const) : ("new" as const) }));
 }
 
 /**

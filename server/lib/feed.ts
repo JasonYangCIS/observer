@@ -2,25 +2,13 @@ import { and, count, desc, eq, isNull, inArray } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
 import { EMPTY_FEEDBACK, getFeedbackStates, type FeedbackState } from "./feedback.js";
 import { hasEngagementData } from "./scores.js";
+import { parseTimestamp } from "./time.js";
 
 const { items, summaries, scores, sources } = schema;
 
 const HALF_LIFE_MS = 24 * 60 * 60 * 1000;
 /** How many of the newest scored items are ranked; the feed shows the top `limit` of them. */
 const CANDIDATE_POOL = 300;
-
-/**
- * Parse a stored timestamp. `posted_at` is ISO-8601; `created_at` is Postgres
- * `now()` text such as "2026-10-07 08:50:09.46-08", which JavaScript can't parse
- * as written. Returns null when the value isn't a date at all.
- */
-export function parseTimestamp(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const iso = value.includes("T") ? value : value.replace(" ", "T");
-  const padded = iso.replace(/([+-]\d{2})$/, "$1:00");
-  const ms = new Date(padded).getTime();
-  return Number.isNaN(ms) ? null : ms;
-}
 
 /** 1 for a brand-new item, 0.5 after a day, approaching 0 as it ages. Unknown age counts as a day old. */
 export function recencyFactor(timestamp: string | null | undefined, now: number): number {
@@ -185,3 +173,5 @@ export async function feedProgress(ownerEmail: string): Promise<FeedProgress> {
     ready: Number(ready.n),
   };
 }
+
+export { parseTimestamp };

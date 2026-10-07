@@ -21,6 +21,7 @@ import {
   IconLayoutSidebarLeftExpand,
   IconLoader2,
   IconMessages,
+  IconAdjustments,
   IconNews,
   IconPin,
   IconRss,
@@ -482,6 +483,7 @@ function ObserverNav({ collapsed }: { collapsed: boolean }) {
     <div className={cn("flex flex-col gap-0.5", collapsed ? "items-center" : "pb-2")}>
       <NavLink to="/feed" label={t("navigation.feed")} icon={IconNews} collapsed={collapsed} />
       <NavLink to="/sources" label={t("navigation.sources")} icon={IconRss} collapsed={collapsed} />
+      <NavLink to="/interests" label={t("navigation.interests")} icon={IconAdjustments} collapsed={collapsed} />
     </div>
   );
 }
