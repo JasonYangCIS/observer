@@ -59,7 +59,7 @@ brand. Its `app.name` is used in transactional emails, and its optional
 ## Application State
 
 - `navigation` describes the current view and selected entity ids. The default
-  chat view is `chat` at `/home`; the sources screen is view `sources` at `/sources`; `/` opens the shared sign-in/signup page.
+  chat view is `chat` at `/home`; the feed is view `feed` at `/feed`; the sources screen is view `sources` at `/sources`; `/` opens the shared sign-in/signup page.
 - `navigate` moves the UI when the app supports it.
 - `view-screen` is the first tool to call when the user's visible context
   matters.
@@ -74,6 +74,7 @@ Observer is a news and community feed (see `PLAN.md`). Actions that exist now:
 
 | Action | Use it to |
 | --- | --- |
+| `list-feed` | The ranked feed: summarized and scored items from enabled sources (60% relevance, 20% importance, 20% recency), each with summary, both scores, the reason, source, and links. `progress` counts items still waiting to be fetched, summarized, or scored. |
 | `list-sources` | List the user's sources with health (last success, error count, last error) and item counts. Call before changing a source to get its `id`. |
 | `manage-sources` | `operation: "add"` (`type: "hn"` or `"rss"` with `url`), `"update"` (`id` + `enabled` and/or `name`), or `"remove"` (`id`; also deletes the source's items, summaries, scores, and runs). |
 | `fetch-source` | Fetch one enabled, approved source now and upsert its items. Returns fetched/new/updated counts. Does not summarize or score. |

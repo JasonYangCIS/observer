@@ -9,7 +9,7 @@ process.env.DATABASE_URL = `pglite:${join(dir, "db")}`;
 const { runMigrations, closeDbExec } = await import("@agent-native/core/db");
 const { APP_MIGRATIONS, APP_MIGRATIONS_TABLE } = await import("../../db/migrations.js");
 const { getDb, schema } = await import("../../db/index.js");
-const { cleanText, extractArticle, fetchArticleText, fetchPendingArticles, MAX_ARTICLE_CHARS } = await import("../article-text.js");
+const { cleanText, extractArticle, htmlToText, fetchArticleText, fetchPendingArticles, MAX_ARTICLE_CHARS } = await import("../article-text.js");
 const { FetchError } = await import("../safe-fetch.js");
 const { eq } = await import("drizzle-orm");
 
@@ -53,6 +53,22 @@ describe("extractArticle", () => {
     expect(r.status).toBe("failed");
     expect(r.error).toMatch(/readable article text/);
     expect(extractArticle("").status).toBe("failed");
+  });
+});
+
+describe("block boundaries", () => {
+  it("keeps a break between blocks instead of gluing words together", () => {
+    const text = htmlToText("<div><h2>Big words</h2><p>Make a sign</p><ul><li>One</li><li>Two</li></ul><p>Line<br>break</p></div>");
+    expect(text).not.toMatch(/wordsMake|signOne|OneTwo|TwoLine/);
+    expect(cleanText(text)).toBe("Big words\nMake a sign\nOne\nTwo\n\nLine\nbreak");
+  });
+
+  it("extracted articles keep words apart at block edges", () => {
+    const html = `<!doctype html><html><head><title>T</title></head><body><article><h1>Heading</h1><div>First block ends here.</div><div>Second block starts here.</div>${body}</article></body></html>`;
+    const r = extractArticle(html);
+    expect(r.status).toBe("ok");
+    expect(r.text).toMatch(/First block ends here\.\s+Second block starts here\./);
+    expect(r.text).not.toMatch(/here\.Second/);
   });
 });
 

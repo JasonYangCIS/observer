@@ -18,13 +18,24 @@ interface HnItem {
   deleted?: boolean;
 }
 
+/** True for absolute http(s) URLs. Story links come from the open web, so anything else is dropped. */
+function isHttpUrl(value: string | undefined): value is string {
+  if (!value) return false;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function mapHnItem(raw: HnItem): NormalizedItem | null {
   if (!raw || raw.dead || raw.deleted || !raw.title) return null;
   if (raw.type && raw.type !== "story") return null;
   const discussionUrl = `https://news.ycombinator.com/item?id=${raw.id}`;
   return {
     externalId: String(raw.id),
-    url: raw.url || discussionUrl,
+    url: isHttpUrl(raw.url) ? raw.url : discussionUrl,
     discussionUrl,
     title: raw.title,
     author: raw.by,
