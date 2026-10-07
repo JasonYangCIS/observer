@@ -63,3 +63,5 @@ Notes:
 ## Known issues
 
 - **SSRF guard over-blocks `192.0.0.0/16`.** The framework's `ssrfSafeFetch` (`@agent-native/core`, `extensions/url-safety`) treats all of `192.0.x.x` as private, but only `192.0.0.0/24` and `192.0.2.0/24` are reserved. `192.0.64.0/18` is public (Automattic / WordPress.com VIP), so feeds on those hosts, for example `github.blog`, fail with "SSRF blocked: refusing to fetch private/internal address". This errs on the safe side. Do not work around it by weakening the guard or reimplementing it; report it upstream and bump `@agent-native/core` when it is fixed (verify with `https://github.blog/feed/`).
+
+  Decision (2026-10-07): accept this for now. The app reports blocked fetches as "blocked by the network safety check ... try a feed from another host" on the source row (`describeError` in `server/lib/ingest.ts`), and the add-source form warns about it. When recommending feeds, prefer hosts that resolve outside `192.0.64.0/18`; check with `python3 -c "import socket; print(socket.getaddrinfo('host.example', 443)[0][4][0])"`.

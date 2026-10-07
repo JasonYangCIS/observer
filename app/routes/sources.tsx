@@ -133,8 +133,12 @@ export default function SourcesPage() {
               required
               value={url}
               placeholder={t("sources.urlPlaceholder")}
+              aria-describedby="source-url-hint"
               onChange={(e) => setUrl(e.target.value)}
             />
+            <p id="source-url-hint" className="text-xs text-muted-foreground">
+              {t("sources.urlHint")}
+            </p>
           </div>
         ) : (
           <div className="flex-1" />

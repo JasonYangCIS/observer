@@ -65,6 +65,8 @@ const messages = {
     typeRss: "RSS / Atom feed",
     urlLabel: "Feed URL",
     urlPlaceholder: "https://example.com/feed.xml",
+    urlHint:
+      "Some public hosts (for example WordPress.com VIP sites like github.blog) can't be fetched yet because of our network safety check. If a feed fails as blocked, try one from another host.",
     add: "Add source",
     adding: "Adding...",
     added: "Source added",

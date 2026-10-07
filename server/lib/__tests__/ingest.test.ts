@@ -9,7 +9,8 @@ process.env.DATABASE_URL = `pglite:${join(dir, "db")}`;
 const { runMigrations, closeDbExec } = await import("@agent-native/core/db");
 const { APP_MIGRATIONS, APP_MIGRATIONS_TABLE } = await import("../../db/migrations.js");
 const { getDb, schema } = await import("../../db/index.js");
-const { ingestSource } = await import("../ingest.js");
+const { describeError, ingestSource } = await import("../ingest.js");
+const { FetchError } = await import("../safe-fetch.js");
 const { eq } = await import("drizzle-orm");
 
 const ALICE = "alice@example.com";
@@ -111,5 +112,20 @@ describe("ingestSource", () => {
     const sourceId = await addSource({ name: "Denied" });
     // Use the real fetcher: the denylist check runs before any network access.
     await expect(ingestSource({ ownerEmail: ALICE, sourceId })).rejects.toThrow(/denylist/);
+  });
+
+  it("explains blocked hosts in plain language and keeps other errors specific", async () => {
+    const blocked = describeError(new FetchError("blocked", "SSRF blocked: refusing to fetch private/internal address (https://x.test/)"));
+    expect(blocked).toMatch(/network safety check/);
+    expect(blocked).toMatch(/another host/);
+    expect(blocked).not.toMatch(/SSRF/);
+    expect(describeError(new FetchError("timeout", "Timed out after 10000ms"))).toBe("timeout: Timed out after 10000ms");
+    expect(describeError(new FetchError("http_error", "HTTP 404", 404))).toBe("http_error: HTTP 404");
+
+    const sourceId = await addSource({ name: "Blocked host" });
+    const blockedFetch = async () => { throw new FetchError("blocked", "SSRF blocked: x"); };
+    await expect(ingestSource({ ownerEmail: ALICE, sourceId, fetchText: blockedFetch })).rejects.toThrow(/another host/);
+    const [src] = await getDb().select().from(schema.sources).where(eq(schema.sources.id, sourceId));
+    expect(src.lastError).toMatch(/another host/);
   });
 });

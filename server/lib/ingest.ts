@@ -26,8 +26,20 @@ function parseList(json: string): string[] {
   }
 }
 
-function describeError(err: unknown): string {
-  if (err instanceof FetchError) return `${err.code}: ${err.message}`;
+/**
+ * Turn a fetch failure into the message stored on the source and shown in the UI.
+ *
+ * Blocked fetches get an actionable explanation: the framework's SSRF guard also
+ * refuses some public hosts (see "Known issues" in OPERATIONS.md), so the user
+ * should be told to try another host rather than shown a raw guard error.
+ */
+export function describeError(err: unknown): string {
+  if (err instanceof FetchError) {
+    if (err.code === "blocked") {
+      return "blocked by the network safety check (the address resolves to a private or reserved range). Some public hosts, such as WordPress.com VIP sites, are affected. Try a feed from another host.";
+    }
+    return `${err.code}: ${err.message}`;
+  }
   return (err instanceof Error ? err.message : String(err)).slice(0, 500);
 }
 
