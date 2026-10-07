@@ -40,6 +40,17 @@ the matching skill only when this app actually uses that workflow. The
 - Verify a write before reporting it done — re-read the row or the screen.
 - Use `view-screen` or application state when the active page/selection is
   unclear.
+- JSDoc where it helps: give every exported function, class, type, and module
+  helper in `server/` and `app/lib/` a JSDoc block when its purpose, contract,
+  or failure behavior isn't obvious from the name and types. Lead with one
+  sentence on what it does and why it exists; add `@param` / `@returns` only for
+  non-obvious values (units, ranges, ownership scoping, ISO vs. epoch),
+  `@throws` for typed failures callers should handle, and a note when the code
+  handles untrusted input or enforces a security boundary. Don't restate the
+  name or the TypeScript types, and skip JSDoc on trivial getters, test files,
+  and React components with self-explanatory props. Actions describe themselves
+  through `description` and `.describe()`; add JSDoc only to their non-obvious
+  helper functions. Update the JSDoc in the same change that alters behavior.
 
 For a custom app, keep `server/plugins/config.ts` aligned with the product
 brand. Its `app.name` is used in transactional emails, and its optional
