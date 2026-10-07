@@ -21,6 +21,7 @@ import {
   IconLayoutSidebarLeftExpand,
   IconLoader2,
   IconMessages,
+  IconNews,
   IconPin,
   IconRss,
   IconSearch,
@@ -438,31 +439,50 @@ function ChatThreadsSection({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-function SourcesNavLink({ collapsed }: { collapsed: boolean }) {
-  const t = useT();
+function NavLink({
+  to,
+  label,
+  icon: Icon,
+  collapsed,
+}: {
+  to: string;
+  label: string;
+  icon: typeof IconRss;
+  collapsed: boolean;
+}) {
   const location = useLocation();
-  const active = location.pathname.startsWith("/sources");
+  const active = location.pathname.startsWith(to);
   const link = (
     <Link
-      to="/sources"
+      to={to}
       aria-current={active ? "page" : undefined}
-      aria-label={collapsed ? t("navigation.sources") : undefined}
+      aria-label={collapsed ? label : undefined}
       className={cn(
         "flex items-center rounded-md text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
         collapsed ? "size-8 justify-center" : "mx-2 gap-2 px-2 py-1.5",
         active && "bg-sidebar-accent text-sidebar-accent-foreground",
       )}
     >
-      <IconRss className="size-4 shrink-0" strokeWidth={1.8} />
-      {collapsed ? null : <span>{t("navigation.sources")}</span>}
+      <Icon className="size-4 shrink-0" strokeWidth={1.8} />
+      {collapsed ? null : <span>{label}</span>}
     </Link>
   );
-  if (!collapsed) return <div className="pb-2">{link}</div>;
+  if (!collapsed) return link;
   return (
     <Tooltip>
       <TooltipTrigger asChild>{link}</TooltipTrigger>
-      <TooltipContent side="right">{t("navigation.sources")}</TooltipContent>
+      <TooltipContent side="right">{label}</TooltipContent>
     </Tooltip>
+  );
+}
+
+function ObserverNav({ collapsed }: { collapsed: boolean }) {
+  const t = useT();
+  return (
+    <div className={cn("flex flex-col gap-0.5", collapsed ? "items-center" : "pb-2")}>
+      <NavLink to="/feed" label={t("navigation.feed")} icon={IconNews} collapsed={collapsed} />
+      <NavLink to="/sources" label={t("navigation.sources")} icon={IconRss} collapsed={collapsed} />
+    </div>
   );
 }
 
@@ -569,7 +589,7 @@ export function Sidebar({
           collapsed ? "items-center gap-1 px-1 py-2" : "pt-1",
         )}
       >
-        <SourcesNavLink collapsed={collapsed} />
+        <ObserverNav collapsed={collapsed} />
         <ChatThreadsSection collapsed={collapsed} />
       </nav>
 

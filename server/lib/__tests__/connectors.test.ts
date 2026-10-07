@@ -87,6 +87,8 @@ describe("hn connector", () => {
       metrics: { points: 10, comments: 3 },
     });
     expect(mapHnItem({ id: 2, type: "story", title: "Ask HN" })?.url).toBe("https://news.ycombinator.com/item?id=2");
+    expect(mapHnItem({ id: 5, type: "story", title: "Odd link", url: "javascript:alert(1)" })?.url).toBe("https://news.ycombinator.com/item?id=5");
+    expect(mapHnItem({ id: 6, type: "story", title: "Odd link", url: "not a url" })?.url).toBe("https://news.ycombinator.com/item?id=6");
     expect(mapHnItem({ id: 3, type: "job", title: "Hiring" })).toBeNull();
     expect(mapHnItem({ id: 4, type: "story", title: "x", dead: true })).toBeNull();
   });

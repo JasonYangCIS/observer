@@ -38,6 +38,22 @@ export function cleanText(raw: string): string {
   return text.length > MAX_ARTICLE_CHARS ? `${text.slice(0, MAX_ARTICLE_CHARS)}…` : text;
 }
 
+const BLOCK_SELECTOR = "p,div,section,article,header,footer,aside,main,li,ul,ol,dl,dt,dd,h1,h2,h3,h4,h5,h6,blockquote,pre,table,tr,figure,figcaption,hr";
+
+/**
+ * Convert Readability's cleaned article HTML to plain text, keeping a line break
+ * at every block boundary. `textContent` alone glues adjacent blocks together
+ * ("...screenMake a sign"), which garbles summaries and breaks verbatim citations.
+ */
+export function htmlToText(html: string): string {
+  const { document } = parseHTML(`<!doctype html><html><body>${html}</body></html>`) as unknown as { document: Document };
+  for (const br of Array.from(document.querySelectorAll("br"))) br.replaceWith(document.createTextNode("\n"));
+  for (const el of Array.from(document.querySelectorAll(BLOCK_SELECTOR))) {
+    el.appendChild(document.createTextNode("\n"));
+  }
+  return document.body.textContent ?? "";
+}
+
 function declaresPaywall(document: Document): boolean {
   for (const node of Array.from(document.querySelectorAll('script[type="application/ld+json"]'))) {
     try {
@@ -75,14 +91,14 @@ export function extractArticle(html: string): ExtractedArticle {
   }
 
   const paywall = declaresPaywall(document);
-  let parsed: { title?: string | null; textContent?: string | null } | null = null;
+  let parsed: { title?: string | null; content?: string | null; textContent?: string | null } | null = null;
   try {
     parsed = new Readability(document.cloneNode(true) as Document).parse();
   } catch {
     parsed = null;
   }
 
-  const text = cleanText(parsed?.textContent ?? "");
+  const text = cleanText(parsed?.content ? htmlToText(parsed.content) : (parsed?.textContent ?? ""));
   const title = parsed?.title?.trim() || undefined;
 
   if (text.length >= MIN_ARTICLE_CHARS) return { status: "ok", text, title };
