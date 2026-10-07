@@ -59,7 +59,7 @@ brand. Its `app.name` is used in transactional emails, and its optional
 ## Application State
 
 - `navigation` describes the current view and selected entity ids. The default
-  chat view is `chat` at `/home`; the feed is view `feed` at `/feed`; the sources screen is view `sources` at `/sources`; `/` opens the shared sign-in/signup page.
+  chat view is `chat` at `/home`; the feed is view `feed` at `/feed`; the sources screen is view `sources` at `/sources`; the interest editor is view `interests` at `/interests`; `/` opens the shared sign-in/signup page.
 - `navigate` moves the UI when the app supports it.
 - `view-screen` is the first tool to call when the user's visible context
   matters.
@@ -77,6 +77,8 @@ Observer is a news and community feed (see `PLAN.md`). Actions that exist now:
 | `list-feed` | The ranked feed (`view: "feed"` hides skipped items, `view: "saved"` lists saved ones): summarized and scored items from enabled sources (60% relevance, 20% importance, 20% recency), each with summary, both scores, the reason, source, and links. `importance` is `null` when the source reported no engagement numbers (only a flat baseline exists), so don't quote it as data. `progress` counts items still waiting to be fetched, summarized, or scored. |
 | `get-daily-update` | Whether the daily feed update is on, its hour and time zone, next run, and how the last run went (status and error). |
 | `set-daily-update` | Turn the daily update on or off and set the local hour and IANA time zone. It writes a scheduled automation (`jobs/observer-daily-update.md`) that fetches sources and summarizes and scores up to 15 new items per run. To run it right now, use `run-automation-now` with that name, or the Update feed button. |
+| `get-interests` | Read the user's interest profile (plain-language text), when it changed, whether it is still the default, and how many recent scores are stale. |
+| `update-interests` | Replace the interest profile with new text. For "more X, less Y": `get-interests`, rewrite it yourself keeping their wording (see the `interests` skill), then pass the full new text. Recent scores then become stale and are re-scored on the next update. |
 | `record-feedback` | Record or clear the user's feedback on an item: `like`, `skip` (hides it from the feed), `save` (adds it to the Saved view), or `opened`. Like and skip exclude each other; `active: false` undoes like, skip, or save; `opened` can't be undone. |
 | `list-sources` | List the user's sources with health (last success, error count, last error) and item counts. Call before changing a source to get its `id`. |
 | `manage-sources` | `operation: "add"` (`type: "hn"` or `"rss"` with `url`), `"update"` (`id` + `enabled` and/or `name`), or `"remove"` (`id`; also deletes the source's items, summaries, scores, and runs). |
