@@ -65,3 +65,12 @@ Notes:
 - **SSRF guard over-blocks `192.0.0.0/16`.** The framework's `ssrfSafeFetch` (`@agent-native/core`, `extensions/url-safety`) treats all of `192.0.x.x` as private, but only `192.0.0.0/24` and `192.0.2.0/24` are reserved. `192.0.64.0/18` is public (Automattic / WordPress.com VIP), so feeds on those hosts, for example `github.blog`, fail with "SSRF blocked: refusing to fetch private/internal address". This errs on the safe side. Do not work around it by weakening the guard or reimplementing it; report it upstream and bump `@agent-native/core` when it is fixed (verify with `https://github.blog/feed/`).
 
   Decision (2026-10-07): accept this for now. The app reports blocked fetches as "blocked by the network safety check ... try a feed from another host" on the source row (`describeError` in `server/lib/ingest.ts`), and the add-source form warns about it. When recommending feeds, prefer hosts that resolve outside `192.0.64.0/18`; check with `python3 -c "import socket; print(socket.getaddrinfo('host.example', 443)[0][4][0])"`.
+
+## Build credits
+
+Netlify builds cost credits, so builds are limited on purpose:
+
+- **Deploy previews are off** (Netlify site settings). CI on GitHub already runs typecheck, tests, `agent-native:doctor`, and the secret scan on every PR for free.
+- **Builds that can't change the deployed app are skipped.** `netlify.toml` runs `scripts/netlify-ignore.sh`, which compares the commit with the last built one and skips the build unless something the app ships changed (`app`, `server`, `actions`, `scripts`, `public`, `.agents`, `AGENTS.md`, dependencies, or build config; test files don't count). Docs, `.github`, and tests-only changes don't build. When it can't compare, it builds. If you add a top-level directory or config file the app depends on, add it to `APP_PATHS` in that script (the test in `scripts/__tests__` covers the behavior).
+- **Production deploys happen when `main` changes app code.** Batch several PRs before merging if credits are tight, or pause auto-publishing in Netlify and publish deliberately.
+- **Check Netlify's Usage page** for what is actually consuming credits. The framework emits a scheduled function on Netlify that wakes about once a minute to look for due automations; if that matters for your plan, `AGENT_NATIVE_DISABLE_RECURRING_JOBS=1` in the build environment turns it off, at the cost of the daily update not firing in production.
