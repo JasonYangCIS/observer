@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const ssrfSafeFetch = vi.fn();
 vi.mock("@agent-native/core/extensions/url-safety", () => ({ ssrfSafeFetch }));
 
-const { safeFetchText } = await import("../safe-fetch.js");
+const { decodeBody, safeFetchText } = await import("../safe-fetch.js");
 
 function streamOf(...chunks: string[]): ReadableStream<Uint8Array> {
   const enc = new TextEncoder();
@@ -70,5 +70,15 @@ describe("response limits", () => {
     const opts = ssrfSafeFetch.mock.calls[0][2];
     expect(() => opts.assertUrlAllowed("https://evil.test/redirected")).toThrow(/denylist/);
     expect(() => opts.assertUrlAllowed("https://fine.test/")).not.toThrow();
+  });
+});
+
+describe("decodeBody", () => {
+  it("honors a declared charset and falls back to UTF-8", () => {
+    const latin1 = Uint8Array.from([0x63, 0x61, 0x66, 0xe9]); // "café" in ISO-8859-1
+    expect(decodeBody(latin1, "text/html; charset=ISO-8859-1")).toBe("café");
+    expect(decodeBody(latin1, 'text/html; charset="iso-8859-1"')).toBe("café");
+    expect(decodeBody(new TextEncoder().encode("café"), "text/html")).toBe("café");
+    expect(decodeBody(new TextEncoder().encode("café"), "text/html; charset=bogus-9000")).toBe("café");
   });
 });
