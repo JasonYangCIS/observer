@@ -15,6 +15,8 @@ export interface FeedItem {
   reason: string;
   metrics: { points?: number; comments?: number };
   feedback: FeedbackState;
+  /** A deliberate pick outside the user's usual interests. */
+  exploration: boolean;
 }
 
 export interface FeedbackState {
@@ -174,6 +176,11 @@ export function FeedRow({
         </h2>
 
         <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+          {item.exploration ? (
+            <span className="rounded bg-muted px-1.5 py-0.5 font-medium text-foreground" title={t("feed.explorationHint")}>
+              {t("feed.exploration")}
+            </span>
+          ) : null}
           <span>{item.source.name}</span>
           <span>{item.source.origin === "user" ? t("feed.trusted") : t("feed.discovered")}</span>
           {posted ? <>{dot}<span>{posted}</span></> : null}

@@ -25,6 +25,15 @@ export function rankScore(relevance: number, importance: number, recency: number
   return 0.6 * relevance + 0.2 * importance + 0.2 * 100 * recency;
 }
 
+/** An exploration pick needs measured buzz at least this high... */
+export const EXPLORE_MIN_IMPORTANCE = 60;
+/** ...and relevance below this: things the user wouldn't normally see. */
+export const EXPLORE_MAX_RELEVANCE = 40;
+/** At most this many exploration items per feed, one per five items shown. */
+export const EXPLORE_MAX = 2;
+/** Zero-based positions the exploration items are inserted at (4th and 9th). */
+export const EXPLORE_POSITIONS = [3, 8];
+
 export interface FeedItem {
   id: string;
   title: string;
@@ -40,6 +49,8 @@ export interface FeedItem {
   reason: string;
   metrics: { points?: number; comments?: number };
   feedback: FeedbackState;
+  /** An exploration pick: high buzz, low relevance, placed to keep the feed from becoming a bubble. */
+  exploration: boolean;
 }
 
 export interface FeedProgress {
@@ -109,17 +120,14 @@ export async function listFeed(args: {
   const states = await getFeedbackStates(ownerEmail, rows.map((r) => r.item.id));
   const stateOf = (id: string) => states.get(id) ?? EMPTY_FEEDBACK;
 
-  const ranked = rows
+  const ranked: FeedItem[] = rows
     .filter((r) => (view === "saved" ? stateOf(r.item.id).saved : !stateOf(r.item.id).skipped))
     .map((r) => ({
       r,
       rank: rankScore(r.score.relevance, r.score.importance, recencyFactor(r.item.postedAt ?? r.item.createdAt, now)),
     }))
     .sort((a, b) => b.rank - a.rank)
-    .slice(0, limit);
-
-  return {
-    items: ranked.map(({ r }) => ({
+    .map(({ r }) => ({
       id: r.item.id,
       title: r.item.title,
       url: r.item.url,
@@ -133,9 +141,42 @@ export async function listFeed(args: {
       reason: r.score.reason,
       metrics: readMetrics(r.item.rawMetrics),
       feedback: stateOf(r.item.id),
-    })),
+      exploration: false,
+    }));
+
+  return {
+    // Exploration only shapes the main feed; a saved view is exactly what was saved.
+    items: view === "feed" ? applyExploration(ranked, limit) : ranked.slice(0, limit),
     progress: await feedProgress(ownerEmail),
   };
+}
+
+/**
+ * Reserve a couple of feed positions for items outside the user's usual interests
+ * (principle 6: avoid the bubble).
+ *
+ * Candidates are items with *measured* importance of at least 60 and relevance
+ * under 40; plain-feed items with only a baseline importance never qualify, so
+ * nothing is promoted on a number we made up. The most important candidates are
+ * moved to the 4th and 9th positions (one slot per five items shown, at most two)
+ * and tagged `exploration`. With no candidates, or fewer than five items, the
+ * list is returned unchanged. Input must already be ranked best first; the result
+ * has at most `limit` items.
+ */
+export function applyExploration(ranked: FeedItem[], limit: number): FeedItem[] {
+  const slots = Math.min(EXPLORE_MAX, Math.floor(Math.min(limit, ranked.length) / 5));
+  const candidates = ranked
+    .filter((i) => i.importance !== null && i.importance >= EXPLORE_MIN_IMPORTANCE && i.relevance < EXPLORE_MAX_RELEVANCE)
+    .sort((a, b) => (b.importance ?? 0) - (a.importance ?? 0)); // stable: ties keep rank order
+  const picks = candidates.slice(0, slots);
+  if (picks.length === 0) return ranked.slice(0, limit);
+
+  const picked = new Set(picks.map((p) => p.id));
+  const result = ranked.filter((i) => !picked.has(i.id)).slice(0, limit - picks.length);
+  picks.forEach((pick, index) => {
+    result.splice(Math.min(EXPLORE_POSITIONS[index], result.length), 0, { ...pick, exploration: true });
+  });
+  return result;
 }
 
 /** How much of the pipeline is still pending, for items from enabled sources. */

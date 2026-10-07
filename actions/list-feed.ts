@@ -5,7 +5,7 @@ import { listFeed } from "../server/lib/feed.js";
 
 export default defineAction({
   description:
-    "Return the user's ranked feed: summarized and scored items from enabled sources, best first (60% relevance, 20% importance, 20% recency). Each item has its summary, relevance, importance, the plain-language reason, source (name, type, trusted or discovered), and links to the article and discussion. `progress` counts items still waiting to be fetched, summarized, or scored.",
+    "Return the user's ranked feed: summarized and scored items from enabled sources, best first (60% relevance, 20% importance, 20% recency). Each item has its summary, relevance, importance, the plain-language reason, source (name, type, trusted or discovered), and links to the article and discussion. Up to two items per ten (`exploration: true`) are high-buzz, low-relevance picks placed at the 4th and 9th positions to keep the feed from becoming a bubble; only items with measured importance qualify. `progress` counts items still waiting to be fetched, summarized, or scored.",
   schema: z.object({
     limit: z.number().int().min(1).max(100).default(30).describe("Maximum items to return (1-100, default 30)"),
     sourceId: z.string().min(1).optional().describe("Only items from this source (id from list-sources)"),
