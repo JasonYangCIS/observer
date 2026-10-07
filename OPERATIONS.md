@@ -59,3 +59,7 @@ Notes:
 - GitHub secret scanning and push protection are enabled on the repo (it is public).
 - CI runs gitleaks (`.github/workflows/secrets.yml`, config in `.gitleaks.toml`) on every PR and push to `main`. It adds a rule for database URLs with inline passwords. Real values never belong in code, docs, tests, or chat; use obvious placeholders such as `postgresql://user:password@host/db`.
 - `.env*` (except `.env.example`), `.agent-native/`, and local database files are gitignored. If a secret is ever committed, rotate it immediately; removing it from a later commit does not remove it from history.
+
+## Known issues
+
+- **SSRF guard over-blocks `192.0.0.0/16`.** The framework's `ssrfSafeFetch` (`@agent-native/core`, `extensions/url-safety`) treats all of `192.0.x.x` as private, but only `192.0.0.0/24` and `192.0.2.0/24` are reserved. `192.0.64.0/18` is public (Automattic / WordPress.com VIP), so feeds on those hosts, for example `github.blog`, fail with "SSRF blocked: refusing to fetch private/internal address". This errs on the safe side. Do not work around it by weakening the guard or reimplementing it; report it upstream and bump `@agent-native/core` when it is fixed (verify with `https://github.blog/feed/`).

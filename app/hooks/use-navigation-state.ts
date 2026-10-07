@@ -39,6 +39,7 @@ function threadIdFromPath(pathname: string): string | null {
 
 function viewForPath(pathname: string): string {
   if (isChatPath(pathname)) return "chat";
+  if (pathname.startsWith("/sources")) return "sources";
   if (pathname.startsWith("/database")) return "database";
   if (pathname.startsWith("/extensions")) return "extensions";
   if (pathname.startsWith("/observability")) return "observability";
@@ -56,6 +57,8 @@ function pathForView(view?: string): string {
     case "home":
     case "ask":
       return "/home";
+    case "sources":
+      return "/sources";
     case "database":
       return "/database";
     case "extensions":
