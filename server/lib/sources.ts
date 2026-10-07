@@ -28,6 +28,9 @@ export interface SourceView {
   errorCount: number;
   lastError: string | null;
   itemCount: number;
+  /** ok | failing | never_fetched | stale | mostly_skipped; null until the first health check. */
+  healthStatus: string | null;
+  healthReason: string | null;
   createdAt: string;
 }
 
@@ -57,6 +60,8 @@ function toView(row: typeof sources.$inferSelect, itemCount: number): SourceView
     errorCount: row.errorCount,
     lastError: row.lastError,
     itemCount,
+    healthStatus: row.healthStatus,
+    healthReason: row.healthReason,
     createdAt: row.createdAt,
   };
 }

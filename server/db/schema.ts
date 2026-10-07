@@ -33,6 +33,10 @@ export const sources = table(
     lastSuccessAt: text("last_success_at"),
     errorCount: integer("error_count").notNull().default(0),
     lastError: text("last_error"),
+    // Set by the health check: ok | failing | never_fetched | stale | mostly_skipped
+    healthStatus: text("health_status"),
+    healthReason: text("health_reason"),
+    healthCheckedAt: text("health_checked_at"),
     createdAt: createdAt(),
   },
   (t) => [index("sources_owner_idx").on(t.ownerEmail)],

@@ -24,6 +24,8 @@ interface SourceView {
   lastError: string | null;
   itemCount: number;
   trustWeight: number;
+  healthStatus: string | null;
+  healthReason: string | null;
 }
 
 function relativeTime(iso: string): string {
@@ -49,6 +51,7 @@ export default function SourcesPage() {
   const fetchSource = useActionMutation("fetch-source");
 
   const importOpml = useActionMutation("import-opml");
+  const health = useActionMutation("check-source-health");
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null);
 
   const sources: SourceView[] = data?.sources ?? [];
@@ -101,8 +104,31 @@ export default function SourcesPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-6">
-      <h1 className="text-xl font-semibold">{t("sources.title")}</h1>
-      <p className="mt-1 text-sm text-muted-foreground">{t("sources.description")}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">{t("sources.title")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t("sources.description")}</p>
+        </div>
+        {sources.length > 0 ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={health.isPending}
+            onClick={() =>
+              health.mutate(
+                {},
+                {
+                  onSuccess: (r: { checked: number; needsAttention: unknown[] }) =>
+                    toast.success(t("sources.checked", { count: r.checked, attention: r.needsAttention.length })),
+                  onError: (err) => toast.error(actionErrorMessage(err) ?? t("sources.checkFailed")),
+                },
+              )
+            }
+          >
+            {health.isPending ? t("sources.checking") : t("sources.checkHealth")}
+          </Button>
+        ) : null}
+      </div>
 
       <AddSourceForm
         existingTypes={sources.map((s) => s.type)}
@@ -144,6 +170,11 @@ export default function SourcesPage() {
                       {s.origin === "user" ? (
                         <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                           {t("sources.trusted")}
+                        </span>
+                      ) : null}
+                      {s.healthStatus && s.healthStatus !== "ok" && s.enabled ? (
+                        <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive" title={s.healthReason ?? undefined}>
+                          {t(`sources.health.${s.healthStatus}`, { defaultValue: s.healthStatus })}
                         </span>
                       ) : null}
                       {Math.abs(s.trustWeight - 1) >= 0.05 ? (
