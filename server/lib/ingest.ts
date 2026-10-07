@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { fail } from "@agent-native/core/action";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
+import { runClustering } from "./cluster.js";
 import { getConnector } from "./connectors/index.js";
 import type { NormalizedItem } from "./connectors/types.js";
 import { FetchError, safeFetchText, type DomainPolicy, type FetchText } from "./safe-fetch.js";
@@ -15,6 +16,8 @@ export interface IngestResult {
   fetched: number;
   newItems: number;
   updatedItems: number;
+  /** Items now grouped with the same story from another source (0 if clustering was skipped). */
+  clusteredItems: number;
 }
 
 function parseList(json: string): string[] {
@@ -85,6 +88,9 @@ export async function ingestSource(args: {
     const unique = [...new Map(fetched.map((i) => [i.externalId, i])).values()];
 
     const { newItems, updatedItems } = await upsertItems(ownerEmail, orgId, sourceId, unique);
+    // Group the same story across sources now, so only one copy is read, summarized, and scored.
+    // A clustering problem must never fail the fetch itself.
+    const clustering = await runClustering(ownerEmail, orgId).catch(() => null);
 
     const now = new Date().toISOString();
     await db
@@ -95,7 +101,7 @@ export async function ingestSource(args: {
       .update(runs)
       .set({ status: "ok", finishedAt: now, itemsProcessed: unique.length })
       .where(eq(runs.id, runId));
-    return { sourceId, runId, fetched: unique.length, newItems, updatedItems };
+    return { sourceId, runId, fetched: unique.length, newItems, updatedItems, clusteredItems: clustering?.clusteredItems ?? 0 };
   } catch (err) {
     const message = describeError(err);
     const now = new Date().toISOString();

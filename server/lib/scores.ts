@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { fail } from "@agent-native/core/action";
-import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, not, or, sql } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
+import { isRedundantMember } from "./cluster.js";
 import { recentFeedbackTitles } from "./feedback.js";
 import { ensureInterestProfile, staleScoreCondition } from "./interests.js";
 import { normalizeForMatch } from "./summaries.js";
@@ -131,7 +132,7 @@ export async function listPendingScores(ownerEmail: string, limit: number) {
     .innerJoin(summaries, and(eq(summaries.itemId, items.id), eq(summaries.ownerEmail, ownerEmail)))
     .leftJoin(scores, and(eq(scores.itemId, items.id), eq(scores.ownerEmail, ownerEmail)))
     .leftJoin(interestProfiles, eq(interestProfiles.ownerEmail, items.ownerEmail))
-    .where(and(eq(items.ownerEmail, ownerEmail), or(isNull(scores.id), staleScoreCondition())))
+    .where(and(eq(items.ownerEmail, ownerEmail), not(isRedundantMember()), or(isNull(scores.id), staleScoreCondition())))
     .orderBy(sql`(${scores.id} is not null)`, desc(items.postedAt), desc(items.createdAt))
     .limit(limit);
   return rows.map((r) => ({ id: r.id, title: r.title, url: r.url, reason: r.scoreId ? ("interests_changed" as const) : ("new" as const) }));

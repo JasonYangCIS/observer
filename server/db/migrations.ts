@@ -165,4 +165,32 @@ export const APP_MIGRATIONS: MigrationEntry[] = [
     CREATE UNIQUE INDEX IF NOT EXISTS feedback_owner_item_signal_uidx ON feedback (owner_email, item_id, signal);
     CREATE INDEX IF NOT EXISTS feedback_owner_signal_created_idx ON feedback (owner_email, signal, created_at);`,
   },
+  {
+    version: 10,
+    name: "observer-clusters",
+    sql: `CREATE TABLE IF NOT EXISTS clusters (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT,
+      url_key TEXT NOT NULL,
+      canonical_item_id TEXT NOT NULL,
+      topic_label TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS clusters_owner_key_uidx ON clusters (owner_email, url_key);`,
+  },
+  {
+    version: 11,
+    name: "observer-cluster-items",
+    sql: `CREATE TABLE IF NOT EXISTS cluster_items (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT,
+      cluster_id TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS cluster_items_owner_item_uidx ON cluster_items (owner_email, item_id);
+    CREATE INDEX IF NOT EXISTS cluster_items_cluster_idx ON cluster_items (cluster_id);`,
+  },
 ];

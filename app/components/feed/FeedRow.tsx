@@ -15,8 +15,17 @@ export interface FeedItem {
   reason: string;
   metrics: { points?: number; comments?: number };
   feedback: FeedbackState;
+  /** The same story on other sources. */
+  alsoOn: AlsoOn[];
   /** A deliberate pick outside the user's usual interests. */
   exploration: boolean;
+}
+
+export interface AlsoOn {
+  source: { id: string; name: string; type: string };
+  url: string;
+  discussionUrl: string | null;
+  metrics: { points?: number; comments?: number };
 }
 
 export interface FeedbackState {
@@ -183,6 +192,26 @@ export function FeedRow({
           ) : null}
           <span>{item.source.name}</span>
           <span>{item.source.origin === "user" ? t("feed.trusted") : t("feed.discovered")}</span>
+          {item.alsoOn.length > 0 ? (
+            <>
+              {dot}
+              <span>{t("feed.alsoOn")}</span>
+              {item.alsoOn.map((other) => {
+                const href = safeHref(other.discussionUrl) ?? safeHref(other.url);
+                const detail = [
+                  other.metrics.points !== undefined ? t("feed.points", { count: other.metrics.points }) : null,
+                  other.metrics.comments !== undefined ? t("feed.comments", { count: other.metrics.comments }) : null,
+                ].filter(Boolean).join(" · ");
+                return href ? (
+                  <a key={other.source.id} href={href} target="_blank" rel="noopener noreferrer" title={detail || other.source.name} className="font-medium text-foreground hover:underline">
+                    {other.source.name}
+                  </a>
+                ) : (
+                  <span key={other.source.id} title={detail || other.source.name}>{other.source.name}</span>
+                );
+              })}
+            </>
+          ) : null}
           {posted ? <>{dot}<span>{posted}</span></> : null}
           {item.author ? <>{dot}<span>{t("feed.by", { author: item.author })}</span></> : null}
           {item.metrics.points !== undefined ? <>{dot}<span>{t(item.source.type === "github" ? "feed.stars" : item.source.type === "devto" ? "feed.reactions" : "feed.points", { count: item.metrics.points })}</span></> : null}

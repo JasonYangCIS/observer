@@ -176,3 +176,35 @@ export const feedback = table(
     index("feedback_owner_signal_created_idx").on(t.ownerEmail, t.signal, t.createdAt),
   ],
 );
+
+/** One story seen on more than one source, keyed by its normalized article URL. */
+export const clusters = table(
+  "clusters",
+  {
+    id: text("id").primaryKey(),
+    ownerEmail: text("owner_email").notNull(),
+    orgId: text("org_id"),
+    urlKey: text("url_key").notNull(),
+    // The member that is fetched, summarized, scored, and shown; the others appear as "also on".
+    canonicalItemId: text("canonical_item_id").notNull(),
+    topicLabel: text("topic_label").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("clusters_owner_key_uidx").on(t.ownerEmail, t.urlKey)],
+);
+
+export const clusterItems = table(
+  "cluster_items",
+  {
+    id: text("id").primaryKey(),
+    ownerEmail: text("owner_email").notNull(),
+    orgId: text("org_id"),
+    clusterId: text("cluster_id").notNull(),
+    itemId: text("item_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("cluster_items_owner_item_uidx").on(t.ownerEmail, t.itemId),
+    index("cluster_items_cluster_idx").on(t.clusterId),
+  ],
+);

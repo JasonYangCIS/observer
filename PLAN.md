@@ -181,7 +181,7 @@ Built as four small PRs, each verified before the next:
 **Done when:** the user can say what they want more or less of, see the feed change, and see why.
 
 ### Phase 3a — More sources and clustering
-Built as four PRs: (A) sources, (B) clustering and badges, (C) comment synthesis, (D) source health. **A is built:** Lobsters, dev.to, GitHub (popular new repos; no official trending API), Product Hunt (public feed), subreddits via public RSS (Reddit's JSON API is blocked without OAuth, and its terms need review before we build on it, so no scores), OPML import, and a 50-source cap per user.
+Built as four PRs: (A) sources, (B) clustering and badges, (C) comment synthesis, (D) source health. **B (clustering) is built:** stories are grouped by normalized article URL (no fuzzy title matching, so two different pages are never merged), only the canonical item is read, summarized, and scored, the others are "also on" badges, and importance is the best measured buzz plus 10 per extra source. **A is built:** Lobsters, dev.to, GitHub (popular new repos; no official trending API), Product Hunt (public feed), subreddits via public RSS (Reddit's JSON API is blocked without OAuth, and its terms need review before we build on it, so no scores), OPML import, and a 50-source cap per user.
 - Add Reddit, Lobsters, dev.to, Product Hunt, and GitHub trending as sources. Check Reddit's API terms and rate limits before committing to it.
 - `cluster-items` with "seen on HN, Reddit, Lobsters" badges; feed cross-source presence into `importance`.
 - Comment synthesis in summaries.

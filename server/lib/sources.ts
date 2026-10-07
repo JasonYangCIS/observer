@@ -3,6 +3,7 @@ import { fail } from "@agent-native/core/action";
 import { and, count, eq, inArray } from "drizzle-orm";
 import { XMLParser } from "fast-xml-parser";
 import { getDb, schema } from "../db/index.js";
+import { detachItems } from "./cluster.js";
 
 const { sources, sourceSettings, items, summaries, scores, runs, feedback } = schema;
 
@@ -339,6 +340,8 @@ export async function removeSource(ownerEmail: string, id: string): Promise<{ re
     const itemIds = (
       await tx.select({ id: items.id }).from(items).where(and(eq(items.sourceId, id), eq(items.ownerEmail, ownerEmail)))
     ).map((r) => r.id);
+    // Clusters that lose a member are repaired or dissolved before the items go.
+    await detachItems(tx, ownerEmail, itemIds);
     for (let i = 0; i < itemIds.length; i += 100) {
       const chunk = itemIds.slice(i, i + 100);
       await tx.delete(summaries).where(and(eq(summaries.ownerEmail, ownerEmail), inArray(summaries.itemId, chunk)));

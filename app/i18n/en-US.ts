@@ -97,6 +97,7 @@ const messages = {
     relShort: "rel",
     by: "by {{author}}",
     trustNote: "{{source}} trust {{value}}: it moves with what you like, save, and skip from this source, and nudges ranking slightly.",
+    alsoOn: "also on",
     exploration: "outside your usual interests",
     explorationHint: "Included on purpose: it is getting a lot of attention but doesn't match your interests, so the feed doesn't become a bubble.",
     like: "like",

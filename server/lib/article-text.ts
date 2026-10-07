@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { fail } from "@agent-native/core/action";
 import { Readability } from "@mozilla/readability";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, not } from "drizzle-orm";
 import { parseHTML } from "linkedom";
 import { getDb, schema } from "../db/index.js";
+import { isRedundantMember } from "./cluster.js";
 import { FetchError, safeFetchText, type DomainPolicy, type FetchText } from "./safe-fetch.js";
 
 const { items, sourceSettings } = schema;
@@ -246,7 +247,7 @@ export async function fetchPendingArticles(args: {
   const rows = await getDb()
     .select({ id: items.id })
     .from(items)
-    .where(and(eq(items.ownerEmail, ownerEmail), inArray(items.fetchStatus, ["pending"])))
+    .where(and(eq(items.ownerEmail, ownerEmail), inArray(items.fetchStatus, ["pending"]), not(isRedundantMember())))
     .orderBy(desc(items.postedAt), desc(items.createdAt))
     .limit(limit);
 
