@@ -74,7 +74,7 @@ Observer is a news and community feed (see `PLAN.md`). Actions that exist now:
 
 | Action | Use it to |
 | --- | --- |
-| `list-feed` | The ranked feed: summarized and scored items from enabled sources (60% relevance, 20% importance, 20% recency), each with summary, both scores, the reason, source, links, and an optional https `imageUrl` thumbnail. `progress` counts items still waiting to be fetched, summarized, or scored. |
+| `list-feed` | The ranked feed: summarized and scored items from enabled sources (60% relevance, 20% importance, 20% recency), each with summary, both scores, the reason, source, and links. `progress` counts items still waiting to be fetched, summarized, or scored. |
 | `get-daily-update` | Whether the daily feed update is on, its hour and time zone, next run, and how the last run went (status and error). |
 | `set-daily-update` | Turn the daily update on or off and set the local hour and IANA time zone. It writes a scheduled automation (`jobs/observer-daily-update.md`) that fetches sources and summarizes and scores up to 15 new items per run. To run it right now, use `run-automation-now` with that name, or the Update feed button. |
 | `list-sources` | List the user's sources with health (last success, error count, last error) and item counts. Call before changing a source to get its `id`. |

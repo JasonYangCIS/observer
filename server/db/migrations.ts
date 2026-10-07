@@ -151,9 +151,4 @@ export const APP_MIGRATIONS: MigrationEntry[] = [
     );
     CREATE INDEX IF NOT EXISTS runs_owner_started_idx ON runs (owner_email, started_at);`,
   },
-  {
-    version: 9,
-    name: "observer-items-image-url",
-    sql: `ALTER TABLE items ADD COLUMN IF NOT EXISTS image_url TEXT;`,
-  },
 ];

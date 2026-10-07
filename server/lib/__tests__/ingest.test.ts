@@ -128,17 +128,4 @@ describe("ingestSource", () => {
     const [src] = await getDb().select().from(schema.sources).where(eq(schema.sources.id, sourceId));
     expect(src.lastError).toMatch(/another host/);
   });
-
-  it("saves feed thumbnails and keeps an existing image when a later fetch has none", async () => {
-    const withImg = `<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><item><title>P</title><link>https://example.com/p</link><guid>p1</guid><media:thumbnail url="https://cdn.example.com/p.jpg"/></item></channel></rss>`;
-    const noImg = `<rss version="2.0"><channel><item><title>P (edited)</title><link>https://example.com/p</link><guid>p1</guid></item></channel></rss>`;
-    const sourceId = await addSource({ name: "Thumbs" });
-    await ingestSource({ ownerEmail: ALICE, sourceId, fetchText: fakeFetch(withImg) });
-    const [first] = await getDb().select().from(schema.items).where(eq(schema.items.sourceId, sourceId));
-    expect(first.imageUrl).toBe("https://cdn.example.com/p.jpg");
-
-    await ingestSource({ ownerEmail: ALICE, sourceId, fetchText: fakeFetch(noImg) });
-    const [second] = await getDb().select().from(schema.items).where(eq(schema.items.sourceId, sourceId));
-    expect(second).toMatchObject({ title: "P (edited)", imageUrl: "https://cdn.example.com/p.jpg" });
-  });
 });

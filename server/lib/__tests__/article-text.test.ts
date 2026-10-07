@@ -9,10 +9,9 @@ process.env.DATABASE_URL = `pglite:${join(dir, "db")}`;
 const { runMigrations, closeDbExec } = await import("@agent-native/core/db");
 const { APP_MIGRATIONS, APP_MIGRATIONS_TABLE } = await import("../../db/migrations.js");
 const { getDb, schema } = await import("../../db/index.js");
-const { cleanText, extractArticle, findPageImage, htmlToText, fetchArticleText, fetchPendingArticles, MAX_ARTICLE_CHARS } = await import("../article-text.js");
+const { cleanText, extractArticle, htmlToText, fetchArticleText, fetchPendingArticles, MAX_ARTICLE_CHARS } = await import("../article-text.js");
 const { FetchError } = await import("../safe-fetch.js");
 const { eq } = await import("drizzle-orm");
-const { parseHTML } = await import("linkedom");
 
 const ALICE = "alice@example.com";
 const BOB = "bob@example.com";
@@ -54,26 +53,6 @@ describe("extractArticle", () => {
     expect(r.status).toBe("failed");
     expect(r.error).toMatch(/readable article text/);
     expect(extractArticle("").status).toBe("failed");
-  });
-});
-
-describe("page thumbnails", () => {
-  const head = (tags: string) => `<!doctype html><html><head><title>T</title>${tags}</head><body><article>${body}</article></body></html>`;
-
-  it("prefers Open Graph, resolves relative URLs against the page, and returns it for every status", () => {
-    const ok = extractArticle(head('<meta property="og:image" content="/img/cover.jpg">'), "https://news.example.com/2026/story");
-    expect(ok).toMatchObject({ status: "ok", imageUrl: "https://news.example.com/img/cover.jpg" });
-    const failed = extractArticle('<html><head><meta property="og:image" content="https://cdn.example.com/x.jpg"></head><body><p>Short.</p></body></html>');
-    expect(failed).toMatchObject({ status: "failed", imageUrl: "https://cdn.example.com/x.jpg" });
-  });
-
-  it("falls back to twitter:image and image_src, and rejects unsafe or missing images", () => {
-    const doc = (tags: string) => (parseHTML(`<html><head>${tags}</head><body></body></html>`) as unknown as { document: Document }).document;
-    expect(findPageImage(doc('<meta name="twitter:image" content="https://cdn.example.com/tw.jpg">'))).toBe("https://cdn.example.com/tw.jpg");
-    expect(findPageImage(doc('<link rel="image_src" href="https://cdn.example.com/src.jpg">'))).toBe("https://cdn.example.com/src.jpg");
-    expect(findPageImage(doc('<meta property="og:image" content="http://cdn.example.com/insecure.jpg"><meta name="twitter:image" content="https://cdn.example.com/ok.jpg">'))).toBe("https://cdn.example.com/ok.jpg");
-    expect(findPageImage(doc('<meta property="og:image" content="data:image/png;base64,AAAA">'))).toBeUndefined();
-    expect(findPageImage(doc(""))).toBeUndefined();
   });
 });
 
@@ -180,21 +159,6 @@ describe("fetchArticleText", () => {
     const blocked = await fetchArticleText({ ownerEmail: ALICE, itemId: id, fetchText: async () => { throw new FetchError("blocked", "SSRF blocked: x"); } });
     expect(blocked.error).toMatch(/network safety check/);
     await expect(fetchArticleText({ ownerEmail: BOB, itemId: id, fetchText: page(article()) })).rejects.toThrow(/not found/i);
-  });
-
-  it("stores the page's thumbnail, but never replaces one the feed already gave", async () => {
-    const withOg = article('<meta property="og:image" content="https://cdn.example.com/page.jpg">');
-    const fresh = await addItem();
-    await fetchArticleText({ ownerEmail: ALICE, itemId: fresh, fetchText: page(withOg) });
-    expect((await row(fresh)).imageUrl).toBe("https://cdn.example.com/page.jpg");
-
-    const fromFeed = await addItem({ imageUrl: "https://cdn.example.com/feed.jpg" });
-    await fetchArticleText({ ownerEmail: ALICE, itemId: fromFeed, fetchText: page(withOg) });
-    expect((await row(fromFeed)).imageUrl).toBe("https://cdn.example.com/feed.jpg");
-
-    const unreadable = await addItem();
-    await fetchArticleText({ ownerEmail: ALICE, itemId: unreadable, fetchText: page('<html><head><meta property="og:image" content="https://cdn.example.com/n.jpg"></head><body><p>Hi</p></body></html>') });
-    expect(await row(unreadable)).toMatchObject({ fetchStatus: "failed", imageUrl: "https://cdn.example.com/n.jpg" });
   });
 
   it("applies the owner's denylist", async () => {

@@ -4,7 +4,6 @@ import { Readability } from "@mozilla/readability";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { parseHTML } from "linkedom";
 import { getDb, schema } from "../db/index.js";
-import { safeImageUrl } from "./image-url.js";
 import { FetchError, safeFetchText, type DomainPolicy, type FetchText } from "./safe-fetch.js";
 
 const { items, sourceSettings } = schema;
@@ -24,27 +23,6 @@ export interface ExtractedArticle {
   text?: string;
   title?: string;
   error?: string;
-  /** https thumbnail from the page's own metadata (Open Graph / Twitter card), if any. */
-  imageUrl?: string;
-}
-
-const IMAGE_META_SELECTORS = [
-  'meta[property="og:image:secure_url"]',
-  'meta[property="og:image"]',
-  'meta[name="twitter:image"]',
-  'meta[name="twitter:image:src"]',
-  'link[rel="image_src"]',
-];
-
-/** The page's preferred thumbnail (Open Graph, Twitter card, image_src), validated and resolved against `baseUrl`. */
-export function findPageImage(document: Document, baseUrl?: string): string | undefined {
-  for (const selector of IMAGE_META_SELECTORS) {
-    for (const node of Array.from(document.querySelectorAll(selector))) {
-      const safe = safeImageUrl(node.getAttribute("content") ?? node.getAttribute("href"), baseUrl);
-      if (safe) return safe;
-    }
-  }
-  return undefined;
 }
 
 /** Normalize extracted text: strip control characters, collapse whitespace, cap length. */
@@ -104,7 +82,7 @@ function declaresPaywall(document: Document): boolean {
  * itself (schema.org `isAccessibleForFree: false`) and yielded too little text;
  * otherwise too little text is a plain `failed`, so we never guess.
  */
-export function extractArticle(html: string, baseUrl?: string): ExtractedArticle {
+export function extractArticle(html: string): ExtractedArticle {
   let document: Document;
   try {
     ({ document } = parseHTML(html) as unknown as { document: Document });
@@ -113,7 +91,6 @@ export function extractArticle(html: string, baseUrl?: string): ExtractedArticle
   }
 
   const paywall = declaresPaywall(document);
-  const imageUrl = findPageImage(document, baseUrl);
   let parsed: { title?: string | null; content?: string | null; textContent?: string | null } | null = null;
   try {
     parsed = new Readability(document.cloneNode(true) as Document).parse();
@@ -124,19 +101,17 @@ export function extractArticle(html: string, baseUrl?: string): ExtractedArticle
   const text = cleanText(parsed?.content ? htmlToText(parsed.content) : (parsed?.textContent ?? ""));
   const title = parsed?.title?.trim() || undefined;
 
-  if (text.length >= MIN_ARTICLE_CHARS) return { status: "ok", text, title, imageUrl };
+  if (text.length >= MIN_ARTICLE_CHARS) return { status: "ok", text, title };
   if (paywall) {
     return {
       status: "paywalled",
       title,
-      imageUrl,
       error: "The page says its content is behind a paywall, so only a preview was available.",
     };
   }
   return {
     status: "failed",
     title,
-    imageUrl,
     error: "Couldn't find readable article text on this page (it may need JavaScript, a login, or isn't an article).",
   };
 }
@@ -220,7 +195,7 @@ export async function fetchArticleText(args: FetchArticleArgs): Promise<ArticleR
     }
   }
 
-  const record = async (status: ArticleStatus, text: string | null, error: string | null, imageUrl?: string): Promise<ArticleResult> => {
+  const record = async (status: ArticleStatus, text: string | null, error: string | null): Promise<ArticleResult> => {
     await db
       .update(items)
       .set({
@@ -229,8 +204,6 @@ export async function fetchArticleText(args: FetchArticleArgs): Promise<ArticleR
         fetchedText: text,
         fetchedTextHash: text ? createHash("sha256").update(text).digest("hex") : null,
         fetchedAt: new Date().toISOString(),
-        // Keep any thumbnail the feed already gave us; otherwise use the page's own.
-        ...(imageUrl && !item.imageUrl ? { imageUrl } : {}),
       })
       .where(and(eq(items.id, itemId), eq(items.ownerEmail, ownerEmail)));
     return { itemId, status, cached: false, chars: text?.length ?? 0, ...(error ? { error } : {}) };
@@ -254,9 +227,9 @@ export async function fetchArticleText(args: FetchArticleArgs): Promise<ArticleR
     return record("failed", null, `Not a web page (${page.contentType.split(";")[0]}), so there's no article text to read.`);
   }
 
-  const extracted = extractArticle(page.text, page.finalUrl);
-  if (extracted.status === "ok") return record("ok", extracted.text!, null, extracted.imageUrl);
-  return record(extracted.status, null, extracted.error ?? "No readable text.", extracted.imageUrl);
+  const extracted = extractArticle(page.text);
+  if (extracted.status === "ok") return record("ok", extracted.text!, null);
+  return record(extracted.status, null, extracted.error ?? "No readable text.");
 }
 
 /**

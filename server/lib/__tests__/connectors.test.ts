@@ -22,29 +22,6 @@ const ATOM = `<?xml version="1.0"?>
     <id>urn:uuid:1</id><updated>2025-10-05T10:00:00Z</updated><author><name>Grace</name></author></entry>
 </feed>`;
 
-describe("feed thumbnails", () => {
-  const wrap = (item: string) => `<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><item><title>T</title><link>https://example.com/p</link>${item}</item></channel></rss>`;
-  const imageOf = (item: string) => parseFeed(wrap(item))[0].imageUrl;
-
-  it("reads media:thumbnail, image media:content, and image enclosures", () => {
-    expect(imageOf('<media:thumbnail url="https://cdn.example.com/t.jpg"/>')).toBe("https://cdn.example.com/t.jpg");
-    expect(imageOf('<media:content url="https://cdn.example.com/c.jpg" medium="image"/>')).toBe("https://cdn.example.com/c.jpg");
-    expect(imageOf('<enclosure url="https://cdn.example.com/e.png" type="image/png" length="1"/>')).toBe("https://cdn.example.com/e.png");
-    expect(imageOf('<media:thumbnail url="https://cdn.example.com/1.jpg"/><media:thumbnail url="https://cdn.example.com/2.jpg"/>')).toBe("https://cdn.example.com/1.jpg");
-  });
-
-  it("ignores non-image enclosures and unsafe URLs, falling through to a safe one", () => {
-    expect(imageOf('<enclosure url="https://cdn.example.com/a.mp3" type="audio/mpeg" length="1"/>')).toBeUndefined();
-    expect(imageOf('<media:thumbnail url="http://cdn.example.com/insecure.jpg"/>')).toBeUndefined();
-    expect(imageOf('<media:thumbnail url="javascript:alert(1)"/><enclosure url="https://cdn.example.com/ok.jpg" type="image/jpeg" length="1"/>')).toBe("https://cdn.example.com/ok.jpg");
-  });
-
-  it("reads an Atom image enclosure link", () => {
-    const atom = `<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>T</title><id>1</id><link rel="alternate" href="https://example.com/a"/><link rel="enclosure" type="image/jpeg" href="https://cdn.example.com/atom.jpg"/></entry></feed>`;
-    expect(parseFeed(atom)[0]).toMatchObject({ url: "https://example.com/a", imageUrl: "https://cdn.example.com/atom.jpg" });
-  });
-});
-
 describe("parseFeed", () => {
   it("parses RSS, skipping items without a safe http(s) link", () => {
     const items = parseFeed(RSS);

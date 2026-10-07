@@ -88,7 +88,6 @@ describe("listFeed", () => {
       id: best, relevance: 90, importance: 50, reason: "Because.", metrics: { points: 120, comments: 40 },
       source: { name: "HN", type: "hn", origin: "user" }, summary: { text: "Summary text.", citationCount: 2, articleUnreadable: false },
     });
-    expect(items[0].imageUrl).toBeNull();
     expect(items.find((i) => i.id === stale)).toBeDefined();
     expect(items.find((i) => i.id === buzzy)).toBeDefined();
     expect((await listFeed({ ownerEmail: owner, limit: 1, now: NOW })).items).toHaveLength(1);

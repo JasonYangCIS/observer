@@ -1,5 +1,4 @@
 import { useT } from "@agent-native/core/client/i18n";
-import { IconLink } from "@tabler/icons-react";
 import { useState } from "react";
 
 export interface FeedItem {
@@ -7,7 +6,6 @@ export interface FeedItem {
   title: string;
   url: string;
   discussionUrl: string | null;
-  imageUrl: string | null;
   author: string | null;
   postedAt: string | null;
   source: { id: string; name: string; type: string; origin: string };
@@ -50,33 +48,7 @@ function domainOf(url: string): string {
   }
 }
 
-/** Square thumbnail; a link glyph stands in when there is no image or it fails to load. */
-function Thumbnail({ src }: { src: string | null }) {
-  const [failed, setFailed] = useState(false);
-  // Thumbnails must be https: the server only stores https URLs, and browsers block http images on https pages.
-  const url = src?.startsWith("https://") ? safeHref(src) : undefined;
-  return (
-    <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted text-muted-foreground" aria-hidden="true">
-      {url && !failed ? (
-        <img
-          src={url}
-          alt=""
-          width={64}
-          height={64}
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          onError={() => setFailed(true)}
-          className="size-full object-cover"
-        />
-      ) : (
-        <IconLink className="size-5" strokeWidth={1.5} />
-      )}
-    </div>
-  );
-}
-
-/** One feed entry: rank, relevance, thumbnail, title, and a single meta line. Summary and reasoning expand in place. */
+/** One feed entry: rank, relevance, title, and a single meta line. Summary and reasoning expand in place. */
 export function FeedRow({ item, rank, defaultOpen = false }: { item: FeedItem; rank: number; defaultOpen?: boolean }) {
   const t = useT();
   const [open, setOpen] = useState(defaultOpen);
@@ -100,8 +72,6 @@ export function FeedRow({ item, rank, defaultOpen = false }: { item: FeedItem; r
         <div className="text-base font-semibold leading-none tabular-nums">{item.relevance}</div>
         <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t("feed.relShort")}</div>
       </div>
-
-      <Thumbnail src={item.imageUrl} />
 
       <div className="min-w-0 flex-1">
         <h2 className="text-[15px] leading-snug">

@@ -23,7 +23,6 @@ const item: FeedItem = {
   title: "Write Like It's 1866 & <b>more</b>",
   url: "https://www.example.com/post",
   discussionUrl: "https://news.ycombinator.com/item?id=1",
-  imageUrl: "https://cdn.example.com/t.jpg",
   author: "ada",
   postedAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
   source: { id: "s1", name: "Hacker News", type: "hn", origin: "user" },
@@ -68,19 +67,7 @@ describe("FeedRow", () => {
     expect(out).toContain("2 cited passages");
   });
 
-  it("shows a thumbnail that loads lazily without leaking the referrer, or a placeholder when there is none", () => {
-    const withImage = html();
-    expect(withImage).toContain('src="https://cdn.example.com/t.jpg"');
-    expect(withImage).toMatch(/referrerpolicy="no-referrer"/i);
-    expect(withImage).toContain('loading="lazy"');
-    const without = html({ imageUrl: null });
-    expect(without).not.toContain("<img");
-    expect(without).toContain("<svg");
-  });
-
-  it("never renders an unsafe image or link, and escapes markup in titles", () => {
-    expect(html({ imageUrl: "javascript:alert(1)" })).not.toContain("<img");
-    expect(html({ imageUrl: "http://cdn.example.com/insecure.jpg" })).not.toContain("<img");
+  it("never renders an unsafe link, and escapes markup in titles", () => {
     const bad = html({ url: "javascript:alert(1)", discussionUrl: "data:text/html,x" });
     expect(bad).not.toContain("javascript:");
     expect(bad).not.toContain("data:text");
