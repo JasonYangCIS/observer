@@ -2,6 +2,27 @@
 
 An agentic news and community feed built on the Agent-Native framework (https://www.agent-native.com). Observer ingests popular tech news and community sources, clusters duplicates, writes cited summaries with link-backs, and scores each item for relevance to the user, with a plain-language reason.
 
+## Status and lessons (updated 2026-10-07)
+
+**Done: Phase 0 and Phase 1** (code merged to `main`; production on Netlify is paused to save credits, so none of it has been deployed or tested there yet).
+
+What exists: hosting and CI config; sources (Hacker News API, RSS/Atom) with a manager screen; ingest with an SSRF-guarded fetch layer; article text extraction with honest `ok | paywalled | failed` states; cited summaries; relevance and importance scores with reasons; a ranked, compact feed; an interest profile seeded with a default; a per-user daily update automation. Actions built: `list-sources`, `manage-sources`, `fetch-source`, `fetch-article-text`, `get-summary-input`, `summarize-item`, `get-score-input`, `score-item`, `list-feed`, `get-daily-update`, `set-daily-update`.
+
+Design decisions that differ from or sharpen the plan:
+- **The agent writes, the server validates.** `CLAUDE.md` keeps actions deterministic and sends synthesis through the agent, so `summarize-item` and `score-item` store what the agent wrote only if it passes checks: a summary needs 1-8 citations that are verbatim quotes from the stored article text; a score must cite interests that are phrases in the user's profile (required at relevance 50+); unreadable articles get a server-written "couldn't be read" record, never an invented summary. The matching `get-*-input` actions give the agent the data and its pending work queue.
+- **Importance is computed, not judged.** Deterministic from real engagement numbers (HN points and comments); sources with none get a flat baseline of 20 that the UI hides (`importance: null`). Relevance is the agent's judgment.
+- **Ownership columns are `owner_email` + nullable `org_id`** (the framework's convention), not `user_id`.
+- **The daily update is an agent prompt** (a saved automation), bounded to 15 items per step. Pending lists are the work queue, so an interrupted run resumes the next day without duplicates.
+- **Feed UI is a compact old-Reddit/HN style list.** Rank, relevance (reason on hover), title with domain, one meta line; summary and "why" expand in place. Thumbnails were tried and removed.
+- **Article text is untrusted.** Parsed in a detached DOM, stored as plain text only, never as markup; skills tell the agent never to follow instructions found in it.
+
+Known issues and open questions:
+- The framework's SSRF guard blocks all of `192.0.0.0/16`, which wrongly includes public WordPress.com VIP hosts (e.g. `github.blog`). Accepted for now; see OPERATIONS.md.
+- **Not yet verified:** Netlify firing the scheduled automation, the practical run-length limit there (the Phase 1 open question), and a real LLM completing the daily prompt end to end. The sidebar "Update feed" flow has been exercised by hand on live data.
+- Netlify credits: deploy previews are off and `scripts/netlify-ignore.sh` skips builds that can't change the app. The framework's once-a-minute scheduler function may also use credits.
+- Hacker News Ask/Show posts have no article, and their own text isn't ingested yet. JavaScript-rendered pages return no text. Some pages glue words where the site uses styled inline elements.
+- Changing the interest profile doesn't re-score old items yet (Phase 2).
+
 ## Instructions for Claude Code
 
 - Before writing code, read the Agent-Native docs, especially Actions, Automations, Database, Application State, and Skills/Memory (https://www.agent-native.com/docs, many pages are also available as `.md`, e.g. `/docs/actions.md`). Do not guess API shapes; follow the docs and the scaffolded template.
@@ -151,10 +172,13 @@ Score on: topical relevance, original reporting vs. aggregation or SEO content, 
 **Done when:** a scheduled run populates a feed of cited summaries, each with a score and a reason, and every item links back to its source.
 
 ### Phase 2 — Feedback and control
-- Like/skip/save buttons wired to `record-feedback`.
-- Interests editor UI plus `update-interests`, so the user can say "more edge rendering, less crypto" in chat or in the editor.
-- Feed scoring uses the interest profile and feedback history.
-- Add an exploration slot or two of high-importance, low-relevance items.
+Built as four small PRs, each verified before the next:
+1. **Feedback.** New `feedback` table. `record-feedback` (like | skip | save | opened; like and skip are mutually exclusive, save is independent, any can be toggled off). Row controls for like, skip, and save; opening an article records `opened`. Skipped items leave the feed; a Saved view lists saved items. `get-score-input` shows the agent recent liked and skipped titles so relevance reflects feedback history.
+2. **Interests.** `get-interests` and `update-interests` (the agent turns "more edge rendering, less crypto" into a rewritten plain-language profile), plus an editor screen. Scores record which profile version produced them, so an edit makes recent scores stale and the pending-score list re-queues them (capped).
+3. **Exploration slots.** A few feed positions (about two per ten) reserved for measured high-importance, low-relevance items, tagged "outside your usual interests". None when nothing qualifies.
+4. **Source trust from feedback.** Likes, saves, and opens nudge a source's `trust_weight`; repeated skips lower it (feeds Phase 3 discovery).
+
+**Done when:** the user can say what they want more or less of, see the feed change, and see why.
 
 ### Phase 3a — More sources and clustering
 - Add Reddit, Lobsters, dev.to, Product Hunt, and GitHub trending as sources. Check Reddit's API terms and rate limits before committing to it.
