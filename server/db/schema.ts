@@ -160,3 +160,19 @@ export const runs = table(
   },
   (t) => [index("runs_owner_started_idx").on(t.ownerEmail, t.startedAt)],
 );
+
+export const feedback = table(
+  "feedback",
+  {
+    id: text("id").primaryKey(),
+    ownerEmail: text("owner_email").notNull(),
+    orgId: text("org_id"),
+    itemId: text("item_id").notNull(),
+    signal: text("signal").notNull(), // like | skip | save | opened
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("feedback_owner_item_signal_uidx").on(t.ownerEmail, t.itemId, t.signal),
+    index("feedback_owner_signal_created_idx").on(t.ownerEmail, t.signal, t.createdAt),
+  ],
+);

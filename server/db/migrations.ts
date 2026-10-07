@@ -151,4 +151,18 @@ export const APP_MIGRATIONS: MigrationEntry[] = [
     );
     CREATE INDEX IF NOT EXISTS runs_owner_started_idx ON runs (owner_email, started_at);`,
   },
+  {
+    version: 9,
+    name: "observer-feedback",
+    sql: `CREATE TABLE IF NOT EXISTS feedback (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT,
+      item_id TEXT NOT NULL,
+      signal TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS feedback_owner_item_signal_uidx ON feedback (owner_email, item_id, signal);
+    CREATE INDEX IF NOT EXISTS feedback_owner_signal_created_idx ON feedback (owner_email, signal, created_at);`,
+  },
 ];

@@ -3,9 +3,10 @@ import { actionErrorMessage, useActionMutation, useActionQuery } from "@agent-na
 import { sendToAgentChat } from "@agent-native/core/client/agent-chat";
 import { useSetPageTitle } from "@agent-native/toolkit/app-shell";
 import { Link } from "react-router";
+import { useState } from "react";
 import { toast } from "sonner";
 
-import { FeedRow, relativeTime, type FeedItem } from "@/components/feed/FeedRow";
+import { FeedRow, relativeTime, type FeedItem, type FeedbackSignal } from "@/components/feed/FeedRow";
 import { Button } from "@/components/ui/button";
 import { APP_TITLE } from "@/lib/app-config";
 
@@ -111,7 +112,24 @@ function DailyUpdateRow() {
 export default function FeedPage() {
   const t = useT();
   useSetPageTitle(t("feed.title"));
-  const { data, isLoading, error } = useActionQuery("list-feed", {});
+  const [view, setView] = useState<"feed" | "saved">("feed");
+  // Re-fetch when switching views so a just-saved item shows up under Saved.
+  const { data, isLoading, error } = useActionQuery("list-feed", { view }, { refetchOnMount: "always" });
+  const feedback = useActionMutation("record-feedback", { skipActionQueryInvalidation: true });
+
+  /** Persist feedback; the row already shows the change, so a failure only needs a toast and a rollback. */
+  const saveFeedback = (itemId: string) => async (signal: FeedbackSignal, active: boolean) => {
+    try {
+      await feedback.mutateAsync({ itemId, signal, active });
+    } catch (err) {
+      toast.error(actionErrorMessage(err) ?? t("feed.feedbackFailed"));
+      throw err;
+    }
+  };
+  // Opening an article is a quiet signal; never interrupt the user if it fails.
+  const recordOpened = (itemId: string) => () => {
+    feedback.mutate({ itemId, signal: "opened", active: true });
+  };
 
   const feedItems: FeedItem[] = data?.items ?? [];
   const progress: FeedProgress | undefined = data?.progress;
@@ -146,7 +164,21 @@ export default function FeedPage() {
         </div>
       ) : null}
 
-      <section className="mt-6" aria-live="polite">
+      <div className="mt-5 flex gap-4 text-sm" role="group" aria-label={t("feed.title")}>
+        {(["feed", "saved"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            aria-pressed={view === v}
+            className={`rounded pb-0.5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${view === v ? "border-b-2 border-foreground font-medium text-foreground" : "text-muted-foreground"}`}
+          >
+            {v === "feed" ? t("feed.tabFeed") : t("feed.tabSaved")}
+          </button>
+        ))}
+      </div>
+
+      <section className="mt-4" aria-live="polite">
         {isLoading ? (
           <div className="space-y-3" aria-hidden="true">
             {[0, 1, 2].map((i) => (
@@ -166,12 +198,19 @@ export default function FeedPage() {
         ) : feedItems.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-8 text-center">
             <h2 className="text-sm font-medium">{t("feed.emptyTitle")}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{t("feed.emptyDescription")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{view === "saved" ? t("feed.savedEmpty") : t("feed.emptyDescription")}</p>
           </div>
         ) : (
           <ol className="divide-y divide-border border-y border-border">
             {feedItems.map((item, index) => (
-              <FeedRow key={item.id} item={item} rank={index + 1} />
+              <FeedRow
+                key={item.id}
+                item={item}
+                rank={index + 1}
+                view={view}
+                onFeedback={saveFeedback(item.id)}
+                onOpen={recordOpened(item.id)}
+              />
             ))}
           </ol>
         )}

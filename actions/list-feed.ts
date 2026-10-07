@@ -9,12 +9,13 @@ export default defineAction({
   schema: z.object({
     limit: z.number().int().min(1).max(100).default(30).describe("Maximum items to return (1-100, default 30)"),
     sourceId: z.string().min(1).optional().describe("Only items from this source (id from list-sources)"),
+    view: z.enum(["feed", "saved"]).default("feed").describe('"feed" (default) hides skipped items; "saved" lists only items the user saved'),
   }),
   http: { method: "GET" },
   readOnly: true,
-  run: async ({ limit, sourceId }) => {
+  run: async ({ limit, sourceId, view }) => {
     const ownerEmail = getRequestUserEmail();
     if (!ownerEmail) fail("Sign in required", { errorCode: "unauthorized", statusCode: 401 });
-    return listFeed({ ownerEmail, limit, sourceId });
+    return listFeed({ ownerEmail, limit, sourceId, view });
   },
 });

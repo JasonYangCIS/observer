@@ -1,5 +1,6 @@
 import { and, count, desc, eq, isNull, inArray } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
+import { EMPTY_FEEDBACK, getFeedbackStates, type FeedbackState } from "./feedback.js";
 import { hasEngagementData } from "./scores.js";
 
 const { items, summaries, scores, sources } = schema;
@@ -50,6 +51,7 @@ export interface FeedItem {
   importance: number | null;
   reason: string;
   metrics: { points?: number; comments?: number };
+  feedback: FeedbackState;
 }
 
 export interface FeedProgress {
@@ -87,11 +89,18 @@ function citationCount(raw: string): number {
 
 /**
  * The owner's ranked feed: items that are summarized and scored, from enabled
- * sources, best first. Items still being processed are counted in `progress`
+ * sources, best first. Skipped items are left out (the "saved" view shows saved ones). Items still being processed are counted in `progress`
  * instead of being shown half-finished.
  */
-export async function listFeed(args: { ownerEmail: string; limit: number; sourceId?: string; now?: number }): Promise<{ items: FeedItem[]; progress: FeedProgress }> {
-  const { ownerEmail, limit, sourceId, now = Date.now() } = args;
+export async function listFeed(args: {
+  ownerEmail: string;
+  limit: number;
+  sourceId?: string;
+  /** "feed" (default) hides skipped items; "saved" lists only saved items. */
+  view?: "feed" | "saved";
+  now?: number;
+}): Promise<{ items: FeedItem[]; progress: FeedProgress }> {
+  const { ownerEmail, limit, sourceId, view = "feed", now = Date.now() } = args;
   const db = getDb();
 
   const rows = await db
@@ -109,7 +118,11 @@ export async function listFeed(args: { ownerEmail: string; limit: number; source
     .orderBy(desc(items.createdAt))
     .limit(CANDIDATE_POOL);
 
+  const states = await getFeedbackStates(ownerEmail, rows.map((r) => r.item.id));
+  const stateOf = (id: string) => states.get(id) ?? EMPTY_FEEDBACK;
+
   const ranked = rows
+    .filter((r) => (view === "saved" ? stateOf(r.item.id).saved : !stateOf(r.item.id).skipped))
     .map((r) => ({
       r,
       rank: rankScore(r.score.relevance, r.score.importance, recencyFactor(r.item.postedAt ?? r.item.createdAt, now)),
@@ -131,6 +144,7 @@ export async function listFeed(args: { ownerEmail: string; limit: number; source
       importance: hasEngagementData(r.item.rawMetrics) ? r.score.importance : null,
       reason: r.score.reason,
       metrics: readMetrics(r.item.rawMetrics),
+      feedback: stateOf(r.item.id),
     })),
     progress: await feedProgress(ownerEmail),
   };

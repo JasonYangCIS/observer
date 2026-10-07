@@ -14,6 +14,34 @@ export interface FeedItem {
   importance: number | null;
   reason: string;
   metrics: { points?: number; comments?: number };
+  feedback: FeedbackState;
+}
+
+export interface FeedbackState {
+  liked: boolean;
+  skipped: boolean;
+  saved: boolean;
+  opened: boolean;
+}
+
+export type FeedbackSignal = "like" | "skip" | "save";
+
+/**
+ * What pressing a feedback button does: the new state and whether the signal is
+ * now on. Like and skip are mutually exclusive; save is independent. Mirrors the
+ * server's rules so the UI can update before the save returns.
+ */
+export function toggleFeedback(fb: FeedbackState, signal: FeedbackSignal): { next: FeedbackState; active: boolean } {
+  const active = !(signal === "like" ? fb.liked : signal === "skip" ? fb.skipped : fb.saved);
+  return {
+    active,
+    next: {
+      ...fb,
+      liked: signal === "like" ? active : signal === "skip" && active ? false : fb.liked,
+      skipped: signal === "skip" ? active : signal === "like" && active ? false : fb.skipped,
+      saved: signal === "save" ? active : fb.saved,
+    },
+  };
 }
 
 /** Links come from the open web; only ever render http(s) ones. */
@@ -49,15 +77,68 @@ function domainOf(url: string): string {
 }
 
 /** One feed entry: rank, relevance, title, and a single meta line. Summary and reasoning expand in place. */
-export function FeedRow({ item, rank, defaultOpen = false }: { item: FeedItem; rank: number; defaultOpen?: boolean }) {
+export function FeedRow({
+  item,
+  rank,
+  defaultOpen = false,
+  view = "feed",
+  onFeedback,
+  onOpen,
+}: {
+  item: FeedItem;
+  rank: number;
+  defaultOpen?: boolean;
+  /** In the Saved view a skipped item stays visible; in the Feed view it collapses to an undo line. */
+  view?: "feed" | "saved";
+  /** Persist a feedback change. Rejecting reverts the optimistic state. */
+  onFeedback?: (signal: FeedbackSignal, active: boolean) => Promise<unknown> | void;
+  /** Called when the user opens the article. */
+  onOpen?: () => void;
+}) {
   const t = useT();
   const [open, setOpen] = useState(defaultOpen);
+  // Feedback is applied immediately and rolled back if saving fails.
+  const [fb, setFb] = useState<FeedbackState>(item.feedback);
+
+  const toggle = (signal: FeedbackSignal) => {
+    const previous = fb;
+    const { next, active } = toggleFeedback(fb, signal);
+    setFb(next);
+    Promise.resolve(onFeedback?.(signal, active)).catch(() => setFb(previous));
+  };
   const articleHref = safeHref(item.url);
   const discussionHref = safeHref(item.discussionUrl);
   const posted = relativeTime(item.postedAt);
   const domain = domainOf(item.url);
   const panelId = `feed-item-${item.id}`;
   const dot = <span aria-hidden="true">·</span>;
+
+  if (fb.skipped && view === "feed") {
+    return (
+      <li className="flex items-center gap-2 py-2 ps-8 text-xs text-muted-foreground sm:gap-3">
+        <span className="min-w-0 truncate">{t("feed.skippedNotice", { title: item.title })}</span>
+        <button
+          type="button"
+          onClick={() => toggle("skip")}
+          className="rounded font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {t("feed.undo")}
+        </button>
+      </li>
+    );
+  }
+
+  const action = (signal: FeedbackSignal, pressed: boolean, label: string, pressedLabel = label) => (
+    <button
+      key={signal}
+      type="button"
+      onClick={() => toggle(signal)}
+      aria-pressed={pressed}
+      className={`rounded hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${pressed ? "font-semibold text-foreground" : ""}`}
+    >
+      {pressed ? pressedLabel : label}
+    </button>
+  );
 
   return (
     <li className="flex items-start gap-2 py-3 sm:gap-3">
@@ -80,6 +161,8 @@ export function FeedRow({ item, rank, defaultOpen = false }: { item: FeedItem; r
               href={articleHref}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => onOpen?.()}
+              onAuxClick={() => onOpen?.()}
               className="font-medium visited:text-muted-foreground hover:underline"
             >
               {item.title}
@@ -116,6 +199,10 @@ export function FeedRow({ item, rank, defaultOpen = false }: { item: FeedItem; r
           >
             {open ? t("feed.hideSummary") : t("feed.showSummary")}
           </button>
+          {dot}
+          {action("like", fb.liked, t("feed.like"), t("feed.liked"))}
+          {action("skip", fb.skipped, t("feed.skip"))}
+          {action("save", fb.saved, t("feed.save"), t("feed.saved"))}
         </p>
 
         {open ? (
