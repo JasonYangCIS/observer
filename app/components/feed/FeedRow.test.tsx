@@ -54,6 +54,12 @@ describe("FeedRow", () => {
     expect(out).not.toContain("Why this score");
   });
 
+  it("hides importance when the source reported no engagement, and still shows a real value", () => {
+    expect(html({ importance: null })).not.toMatch(/importance \d+/);
+    expect(html({ importance: 0 })).toContain("importance 0");
+    expect(html({ importance: 20 })).toContain("importance 20");
+  });
+
   it("keeps the reason one hover away even while collapsed (never a bare number)", () => {
     expect(html()).toContain(`title="${item.reason}"`);
   });

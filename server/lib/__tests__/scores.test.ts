@@ -9,7 +9,7 @@ process.env.DATABASE_URL = `pglite:${join(dir, "db")}`;
 const { runMigrations, closeDbExec } = await import("@agent-native/core/db");
 const { APP_MIGRATIONS, APP_MIGRATIONS_TABLE } = await import("../../db/migrations.js");
 const { getDb, schema } = await import("../../db/index.js");
-const { BASELINE_IMPORTANCE, computeImportance, findUnknownInterests, getScoreInput, listPendingScores, saveScore } = await import("../scores.js");
+const { BASELINE_IMPORTANCE, computeImportance, findUnknownInterests, hasEngagementData, getScoreInput, listPendingScores, saveScore } = await import("../scores.js");
 const { DEFAULT_INTEREST_PROFILE, ensureInterestProfile } = await import("../interests.js");
 const { eq } = await import("drizzle-orm");
 
@@ -62,6 +62,15 @@ describe("computeImportance", () => {
       expect(computeImportance("rss", raw)).toMatchObject({ score: BASELINE_IMPORTANCE });
     }
     expect(computeImportance("rss", "{}").reason).toMatch(/No engagement data/);
+  });
+});
+
+describe("hasEngagementData", () => {
+  it("is true only when the source reported points or comments, even zero", () => {
+    expect(hasEngagementData(JSON.stringify({ points: 150, comments: 80 }))).toBe(true);
+    expect(hasEngagementData(JSON.stringify({ comments: 0 }))).toBe(true);
+    expect(hasEngagementData(JSON.stringify({ points: 0, comments: 0 }))).toBe(true); // a real, measured zero
+    for (const raw of ["{}", "not json", "null", JSON.stringify({ points: "12" })]) expect(hasEngagementData(raw)).toBe(false);
   });
 });
 

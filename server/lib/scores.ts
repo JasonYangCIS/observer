@@ -24,6 +24,31 @@ function normalized(value: number, max: number): number {
   return Math.min(1, Math.log1p(Math.max(0, value)) / Math.log1p(max));
 }
 
+/** Parse a stored metrics blob into the engagement numbers a source reported, if any. */
+function readEngagement(rawMetrics: string): { points: number | null; comments: number | null } {
+  let metrics: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(rawMetrics);
+    if (parsed && typeof parsed === "object") metrics = parsed;
+  } catch {
+    // Treated as no metrics.
+  }
+  return {
+    points: typeof metrics.points === "number" ? metrics.points : null,
+    comments: typeof metrics.comments === "number" ? metrics.comments : null,
+  };
+}
+
+/**
+ * True when the source reported real engagement numbers, so the importance is a
+ * measurement. False means it is only the flat baseline and shouldn't be shown
+ * as if it were data.
+ */
+export function hasEngagementData(rawMetrics: string): boolean {
+  const { points, comments } = readEngagement(rawMetrics);
+  return points !== null || comments !== null;
+}
+
 /**
  * Importance from the engagement numbers the source reported.
  *
@@ -33,15 +58,7 @@ function normalized(value: number, max: number): number {
  * presence will feed into this once clustering exists.
  */
 export function computeImportance(sourceType: string | null, rawMetrics: string): Importance {
-  let metrics: Record<string, unknown> = {};
-  try {
-    const parsed = JSON.parse(rawMetrics);
-    if (parsed && typeof parsed === "object") metrics = parsed;
-  } catch {
-    // Treated as no metrics.
-  }
-  const points = typeof metrics.points === "number" ? metrics.points : null;
-  const comments = typeof metrics.comments === "number" ? metrics.comments : null;
+  const { points, comments } = readEngagement(rawMetrics);
 
   if (points === null && comments === null) {
     return { score: BASELINE_IMPORTANCE, reason: "No engagement data from this source, so importance is a low baseline." };

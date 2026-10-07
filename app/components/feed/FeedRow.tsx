@@ -11,7 +11,7 @@ export interface FeedItem {
   source: { id: string; name: string; type: string; origin: string };
   summary: { text: string; citationCount: number; articleUnreadable: boolean };
   relevance: number;
-  importance: number;
+  importance: number | null;
   reason: string;
   metrics: { points?: number; comments?: number };
 }
@@ -104,8 +104,7 @@ export function FeedRow({ item, rank, defaultOpen = false }: { item: FeedItem; r
               </a>
             </>
           ) : null}
-          {dot}
-          <span>{t("feed.importance", { value: item.importance })}</span>
+          {item.importance !== null ? <>{dot}<span>{t("feed.importance", { value: item.importance })}</span></> : null}
           {item.summary.articleUnreadable ? <>{dot}<span className="italic">{t("feed.unreadable")}</span></> : null}
           {dot}
           <button
