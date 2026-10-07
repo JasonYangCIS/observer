@@ -42,7 +42,7 @@ describe("daily update automation", () => {
   });
 
   it("the prompt only uses actions that exist, stays bounded, and treats articles as untrusted", () => {
-    for (const action of ["list-sources", "fetch-source", "fetch-article-text", "get-summary-input", "summarize-item", "get-score-input", "score-item"]) {
+    for (const action of ["list-sources", "fetch-source", "fetch-article-text", "get-summary-input", "summarize-item", "get-score-input", "score-item", "check-source-health"]) {
       expect(DAILY_UPDATE_PROMPT).toContain(action);
     }
     expect(DAILY_UPDATE_PROMPT).toContain(`limit ${DAILY_BATCH_SIZE}`);

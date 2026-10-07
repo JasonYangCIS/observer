@@ -3,6 +3,7 @@ import { fail } from "@agent-native/core/action";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "../db/index.js";
 import { runClustering } from "./cluster.js";
+import { checkSourceHealth } from "./health.js";
 import { getConnector } from "./connectors/index.js";
 import type { NormalizedItem } from "./connectors/types.js";
 import { FetchError, safeFetchText, type DomainPolicy, type FetchText } from "./safe-fetch.js";
@@ -101,6 +102,7 @@ export async function ingestSource(args: {
       .update(runs)
       .set({ status: "ok", finishedAt: now, itemsProcessed: unique.length })
       .where(eq(runs.id, runId));
+    await checkSourceHealth(ownerEmail, [sourceId]).catch(() => null);
     return { sourceId, runId, fetched: unique.length, newItems, updatedItems, clusteredItems: clustering?.clusteredItems ?? 0 };
   } catch (err) {
     const message = describeError(err);
@@ -113,6 +115,7 @@ export async function ingestSource(args: {
       .update(runs)
       .set({ status: "error", finishedAt: now, error: message })
       .where(eq(runs.id, runId));
+    await checkSourceHealth(ownerEmail, [sourceId]).catch(() => null);
     fail(`Fetching "${source.name}" failed: ${message}`, {
       errorCode: "fetch_failed",
       statusCode: 502,

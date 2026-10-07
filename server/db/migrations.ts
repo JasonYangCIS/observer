@@ -193,4 +193,11 @@ export const APP_MIGRATIONS: MigrationEntry[] = [
     CREATE UNIQUE INDEX IF NOT EXISTS cluster_items_owner_item_uidx ON cluster_items (owner_email, item_id);
     CREATE INDEX IF NOT EXISTS cluster_items_cluster_idx ON cluster_items (cluster_id);`,
   },
+  {
+    version: 12,
+    name: "observer-sources-health",
+    sql: `ALTER TABLE sources ADD COLUMN IF NOT EXISTS health_status TEXT;
+    ALTER TABLE sources ADD COLUMN IF NOT EXISTS health_reason TEXT;
+    ALTER TABLE sources ADD COLUMN IF NOT EXISTS health_checked_at TEXT;`,
+  },
 ];
