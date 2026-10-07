@@ -10,6 +10,9 @@ export default defineConfig({
     },
   },
   test: {
+    // Several test files each boot their own PGlite database in parallel.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     exclude: [
       "**/node_modules/**",
       "**/.git/**",
