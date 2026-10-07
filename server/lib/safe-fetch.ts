@@ -99,6 +99,23 @@ async function waitForHost(host: string, minIntervalMs: number): Promise<void> {
   if (slot > now) await new Promise((r) => setTimeout(r, slot - now));
 }
 
+/**
+ * Decode bytes using the charset declared in a Content-Type header, falling
+ * back to UTF-8 for a missing or unsupported label.
+ */
+export function decodeBody(bytes: Uint8Array, contentType: string): string {
+  const label = /charset\s*=\s*["']?([\w.:-]+)/i.exec(contentType)?.[1];
+  if (label) {
+    try {
+      return new TextDecoder(label).decode(bytes);
+    } catch {
+      // Unknown charset label: fall through to UTF-8.
+    }
+  }
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+/** Read a response body as text, aborting once it exceeds `maxBytes`. */
 async function readCapped(res: Response, maxBytes: number): Promise<string> {
   const declared = Number(res.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > maxBytes) {
@@ -125,7 +142,7 @@ async function readCapped(res: Response, maxBytes: number): Promise<string> {
     buf.set(c, offset);
     offset += c.byteLength;
   }
-  return new TextDecoder("utf-8").decode(buf);
+  return decodeBody(buf, res.headers.get("content-type") ?? "");
 }
 
 export const safeFetchText: FetchText = async (url, options = {}) => {
