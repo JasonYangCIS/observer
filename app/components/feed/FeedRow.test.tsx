@@ -93,6 +93,45 @@ describe("FeedRow", () => {
   });
 });
 
+describe("read state", () => {
+  const none = { liked: false, skipped: false, saved: false, opened: false };
+  const readItem = { feedback: { ...none, opened: true } };
+
+  it("makes an unread item stand out: a dot, a bold title, and no read badge", () => {
+    const out = html();
+    expect(out).toContain('data-read="false"');
+    expect(out).toContain("bg-primary"); // the unread dot
+    expect(out).toContain("Unread: "); // announced to screen readers
+    expect(out).toMatch(/<a [^>]*class="font-semibold text-foreground/);
+    expect(out).not.toContain(">read</span>");
+    expect(out).not.toContain("<svg");
+  });
+
+  it("makes a read item obviously different: a check, a read badge, and a muted, lighter title", () => {
+    const out = html(readItem);
+    expect(out).toContain('data-read="true"');
+    expect(out).toContain("<svg"); // the check mark
+    expect(out).toContain(">read</span>"); // the badge in the meta line
+    expect(out).toContain("Read: ");
+    expect(out).toMatch(/<a [^>]*class="font-normal text-muted-foreground/);
+    expect(out).not.toContain("bg-primary");
+    expect(out).not.toContain("font-semibold text-foreground");
+  });
+
+  it("comes from the saved 'opened' signal, not the browser's visited-link styling", () => {
+    expect(html()).not.toContain("visited:");
+    expect(html(readItem)).not.toContain("visited:");
+  });
+
+  it("still shows read state alongside other tags and in the saved view", () => {
+    const out = html({ ...readItem, exploration: true });
+    expect(out).toContain(">read</span>");
+    expect(out).toContain("outside your usual interests");
+    const saved = renderToStaticMarkup(<FeedRow item={{ ...item, ...readItem }} rank={1} view="saved" />);
+    expect(saved).toContain('data-read="true"');
+  });
+});
+
 describe("also on", () => {
   const other = (name: string, over: object = {}) => ({ source: { id: name, name, type: "lobsters" }, url: `https://${name}.example.com/story`, discussionUrl: `https://${name}.example.com/thread`, metrics: { points: 66, comments: 31 }, ...over });
 
