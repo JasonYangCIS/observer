@@ -81,11 +81,12 @@ Do this once you are happy locally and want to spend the credits. `scripts/netli
 
 ## What comes next
 
-Decide after you have used it. In plan order:
+Decided so far (2026-10-08): **Phase 3b comes first, then teams.** No email or Slack digests, ever for now: Observer is a place you visit.
 
-- **Phase 3b: source modes and discovery.** Trusted-only, autonomous, and hybrid modes; `discover-sources`, `evaluate-source`, `review-candidate`; a review queue and "Discovered" badges. This is where the agent first proposes new sources, and where the auto-disable rule for unhealthy discovered sources starts to matter.
+- **Phase 3b: source modes and discovery (next).** Trusted-only, autonomous, and hybrid modes; `discover-sources`, `evaluate-source`, `review-candidate`; a review queue and "Discovered" badges. This is where the agent first proposes new sources, and where the auto-disable rule for unhealthy discovered sources starts to matter.
+- **Teams (after 3b).** One shared feed for a team: shared sources and **one shared team interest profile**, articles processed once for everyone, and personal read, like, skip, and save state. No per-person scoring, and no curation features in the first version. See Phase 5 in `PLAN.md`.
 - **Phase 3c: advanced connectors.** An MCP connector (approved servers, read-only tools) and a guarded scraper. The riskiest security surface, so it comes after the rest has been exercised.
-- **Phase 4: agent chat and alerts.** The agent knows the selected item ("summarize the comments on this", "more like this"), natural-language questions over the archive, and topic watches with alerts.
-- **Phase 5: digests and teams.** Email and Slack digests, shared team feeds, and exposing Observer's actions to other agents over MCP/A2A.
+- **Phase 4: agent chat and alerts.** The agent knows the selected item ("summarize the comments on this", "more like this"), natural-language questions over the archive, and topic watches with in-app alerts.
+- **Agent access** (MCP/A2A so other agents can query Observer) and optional public RSS stay at the end.
 
 Questions worth answering from real use before choosing: Is the feed what you wanted to read? Do the relevance scores feel right, and do the reasons convince you? Is 15 items per step too few or too many? Which sources earn their place? Do you want discovery, or is a hand-picked list enough?
