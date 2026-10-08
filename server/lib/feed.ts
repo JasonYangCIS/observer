@@ -135,9 +135,13 @@ export async function listFeed(args: {
   sourceId?: string;
   /** "feed" (default) hides skipped items; "saved" lists only saved items. */
   view?: "feed" | "saved";
+  /** "ranked" (default) is the blended score; "newest" is purely by date, newest first. */
+  sort?: "ranked" | "newest";
+  /** Leave out items the user has opened. Applied before `limit`, so the page fills with unread items. */
+  hideRead?: boolean;
   now?: number;
-}): Promise<{ items: FeedItem[]; progress: FeedProgress }> {
-  const { ownerEmail, limit, sourceId, view = "feed", now = Date.now() } = args;
+}): Promise<{ items: FeedItem[]; progress: FeedProgress; readCount: number }> {
+  const { ownerEmail, limit, sourceId, view = "feed", sort = "ranked", hideRead = false, now = Date.now() } = args;
   const db = getDb();
 
   const rows = await db
@@ -159,7 +163,7 @@ export async function listFeed(args: {
   const states = await getFeedbackStates(ownerEmail, rows.map((r) => r.item.id));
   const stateOf = (id: string) => states.get(id) ?? EMPTY_FEEDBACK;
 
-  const ranked: FeedItem[] = rows
+  const entries = rows
     .filter((r) => (view === "saved" ? stateOf(r.item.id).saved : !stateOf(r.item.id).skipped))
     .map((r) => {
       const cluster = clusterOf.get(r.item.id);
@@ -168,30 +172,40 @@ export async function listFeed(args: {
         : hasEngagementData(r.item.rawMetrics)
           ? r.score.importance
           : null;
-      return { r, cluster, importance, rank: rankScore(r.score.relevance, importance ?? r.score.importance, recencyFactor(r.item.postedAt ?? r.item.createdAt, now), r.source.trustWeight) };
+      const item: FeedItem = {
+        id: r.item.id,
+        title: r.item.title,
+        url: r.item.url,
+        discussionUrl: r.item.discussionUrl,
+        author: r.item.author,
+        postedAt: r.item.postedAt,
+        source: { id: r.source.id, name: r.source.name, type: r.source.type, origin: r.source.origin, trustWeight: r.source.trustWeight },
+        summary: { text: r.summary.summaryText, citationCount: citationCount(r.summary.citations), articleUnreadable: r.summary.inputHash === null },
+        relevance: r.score.relevance,
+        importance,
+        reason: r.score.reason,
+        metrics: readMetrics(r.item.rawMetrics),
+        feedback: stateOf(r.item.id),
+        alsoOn: cluster?.alsoOn ?? [],
+        exploration: false,
+      };
+      return {
+        item,
+        rank: rankScore(r.score.relevance, importance ?? r.score.importance, recencyFactor(r.item.postedAt ?? r.item.createdAt, now), r.source.trustWeight),
+        when: parseTimestamp(r.item.postedAt) ?? parseTimestamp(r.item.createdAt) ?? 0,
+      };
     })
-    .sort((a, b) => b.rank - a.rank)
-    .map(({ r, cluster, importance }) => ({
-      id: r.item.id,
-      title: r.item.title,
-      url: r.item.url,
-      discussionUrl: r.item.discussionUrl,
-      author: r.item.author,
-      postedAt: r.item.postedAt,
-      source: { id: r.source.id, name: r.source.name, type: r.source.type, origin: r.source.origin, trustWeight: r.source.trustWeight },
-      summary: { text: r.summary.summaryText, citationCount: citationCount(r.summary.citations), articleUnreadable: r.summary.inputHash === null },
-      relevance: r.score.relevance,
-      importance,
-      reason: r.score.reason,
-      metrics: readMetrics(r.item.rawMetrics),
-      feedback: stateOf(r.item.id),
-      alsoOn: cluster?.alsoOn ?? [],
-      exploration: false,
-    }));
+    .sort(sort === "newest" ? (a, b) => b.when - a.when || b.rank - a.rank : (a, b) => b.rank - a.rank);
+
+  const all = entries.map((e) => e.item);
+  const readCount = all.filter((i) => i.feedback.opened).length;
+  const visible = hideRead ? all.filter((i) => !i.feedback.opened) : all;
 
   return {
-    // Exploration only shapes the main feed; a saved view is exactly what was saved.
-    items: view === "feed" ? applyExploration(ranked, limit) : ranked.slice(0, limit),
+    // Exploration slots only make sense in the ranked main feed; a saved view is exactly what was saved,
+    // and a date-ordered list shouldn't have items moved out of date order.
+    items: view === "feed" && sort === "ranked" ? applyExploration(visible, limit) : visible.slice(0, limit),
+    readCount,
     progress: await feedProgress(ownerEmail),
   };
 }

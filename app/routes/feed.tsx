@@ -3,12 +3,16 @@ import { actionErrorMessage, useActionMutation, useActionQuery } from "@agent-na
 import { sendToAgentChat } from "@agent-native/core/client/agent-chat";
 import { useSetPageTitle } from "@agent-native/toolkit/app-shell";
 import { Link } from "react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { FeedRow, relativeTime, type FeedItem, type FeedbackSignal } from "@/components/feed/FeedRow";
+import { FeedToolbar, type FeedSort, type FeedView } from "@/components/feed/FeedToolbar";
 import { Button } from "@/components/ui/button";
 import { APP_TITLE } from "@/lib/app-config";
+
+const SORT_KEY = "observer.feed.sort";
+const HIDE_READ_KEY = "observer.feed.hideRead";
 
 export function meta() {
   return [{ title: `Feed — ${APP_TITLE}` }];
@@ -112,9 +116,39 @@ function DailyUpdateRow() {
 export default function FeedPage() {
   const t = useT();
   useSetPageTitle(t("feed.title"));
-  const [view, setView] = useState<"feed" | "saved">("feed");
+  const [view, setView] = useState<FeedView>("feed");
+  const [sort, setSortState] = useState<FeedSort>("ranked");
+  const [hideRead, setHideReadState] = useState(false);
+
+  // Remember the sort order and filter in this browser. Stored after mount so the first
+  // render matches the server's, and a blocked or cleared store simply means the defaults.
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(SORT_KEY) === "newest") setSortState("newest");
+      if (window.localStorage.getItem(HIDE_READ_KEY) === "1") setHideReadState(true);
+    } catch {
+      // Storage unavailable: keep the defaults.
+    }
+  }, []);
+  const remember = (key: string, value: string) => {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {
+      // Not remembering is fine.
+    }
+  };
+  const setSort = (next: FeedSort) => {
+    setSortState(next);
+    remember(SORT_KEY, next);
+  };
+  const setHideRead = (next: boolean) => {
+    setHideReadState(next);
+    remember(HIDE_READ_KEY, next ? "1" : "0");
+  };
+
   // Re-fetch when switching views so a just-saved item shows up under Saved.
-  const { data, isLoading, error } = useActionQuery("list-feed", { view }, { refetchOnMount: "always" });
+  const { data, isLoading, error } = useActionQuery("list-feed", { view, sort, hideRead }, { refetchOnMount: "always" });
+  const readCount: number = data?.readCount ?? 0;
   const feedback = useActionMutation("record-feedback", { skipActionQueryInvalidation: true });
 
   /** Persist feedback; the row already shows the change, so a failure only needs a toast and a rollback. */
@@ -164,19 +198,15 @@ export default function FeedPage() {
         </div>
       ) : null}
 
-      <div className="mt-5 flex gap-4 text-sm" role="group" aria-label={t("feed.title")}>
-        {(["feed", "saved"] as const).map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setView(v)}
-            aria-pressed={view === v}
-            className={`rounded pb-0.5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${view === v ? "border-b-2 border-foreground font-medium text-foreground" : "text-muted-foreground"}`}
-          >
-            {v === "feed" ? t("feed.tabFeed") : t("feed.tabSaved")}
-          </button>
-        ))}
-      </div>
+      <FeedToolbar
+        view={view}
+        onViewChange={setView}
+        sort={sort}
+        onSortChange={setSort}
+        hideRead={hideRead}
+        onHideReadChange={setHideRead}
+        readCount={readCount}
+      />
 
       <section className="mt-4" aria-live="polite">
         {isLoading ? (
@@ -194,6 +224,11 @@ export default function FeedPage() {
             <Button asChild className="mt-4" variant="outline">
               <Link to="/sources">{t("feed.goToSources")}</Link>
             </Button>
+          </div>
+        ) : feedItems.length === 0 && hideRead && readCount > 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-8 text-center">
+            <h2 className="text-sm font-medium">{t("feed.caughtUpTitle")}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{t("feed.caughtUpDescription")}</p>
           </div>
         ) : feedItems.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-8 text-center">
