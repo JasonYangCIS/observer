@@ -1,4 +1,5 @@
 import { useT } from "@agent-native/core/client/i18n";
+import { IconCheck } from "@tabler/icons-react";
 import { useState } from "react";
 
 export interface FeedItem {
@@ -111,6 +112,15 @@ export function FeedRow({
   // Feedback is applied immediately and rolled back if saving fails.
   const [fb, setFb] = useState<FeedbackState>(item.feedback);
 
+  // Opening the article marks the item read. It shows immediately and is saved as the
+  // "opened" signal, so it stays read across sessions and browsers.
+  const read = fb.opened;
+  const markRead = () => {
+    if (read) return;
+    setFb((current) => ({ ...current, opened: true }));
+    onOpen?.();
+  };
+
   const toggle = (signal: FeedbackSignal) => {
     const previous = fb;
     const { next, active } = toggleFeedback(fb, signal);
@@ -152,7 +162,7 @@ export function FeedRow({
   );
 
   return (
-    <li className="flex items-start gap-2 py-3 sm:gap-3">
+    <li className="flex items-start gap-2 py-3 sm:gap-3" data-read={read ? "true" : "false"}>
       <span className="w-6 shrink-0 pt-1 text-end text-sm tabular-nums text-muted-foreground">{rank}</span>
 
       <div
@@ -161,30 +171,37 @@ export function FeedRow({
         role="img"
         aria-label={t("feed.relevanceTitle", { value: item.relevance })}
       >
-        <div className="text-base font-semibold leading-none tabular-nums">{item.relevance}</div>
+        <div className={`text-base font-semibold leading-none tabular-nums ${read ? "text-muted-foreground" : ""}`}>{item.relevance}</div>
         <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t("feed.relShort")}</div>
       </div>
 
       <div className="min-w-0 flex-1">
         <h2 className="text-[15px] leading-snug">
+          {read ? (
+            <IconCheck aria-hidden="true" className="me-1.5 inline size-4 align-text-bottom text-muted-foreground" strokeWidth={2.5} />
+          ) : (
+            <span aria-hidden="true" className="me-2 inline-block size-2 rounded-full bg-primary align-middle" />
+          )}
+          <span className="sr-only">{read ? t("feed.read") : t("feed.unread")}: </span>
           {articleHref ? (
             <a
               href={articleHref}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => onOpen?.()}
-              onAuxClick={() => onOpen?.()}
-              className="font-medium visited:text-muted-foreground hover:underline"
+              onClick={markRead}
+              onAuxClick={markRead}
+              className={read ? "font-normal text-muted-foreground hover:text-foreground hover:underline" : "font-semibold text-foreground hover:underline"}
             >
               {item.title}
             </a>
           ) : (
-            <span className="font-medium">{item.title}</span>
+            <span className={read ? "font-normal text-muted-foreground" : "font-semibold"}>{item.title}</span>
           )}
           {domain ? <span className="ms-1.5 text-xs text-muted-foreground">({domain})</span> : null}
         </h2>
 
         <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+          {read ? <span className="rounded bg-muted px-1.5 py-0.5 font-medium text-foreground">{t("feed.readBadge")}</span> : null}
           {item.exploration ? (
             <span className="rounded bg-muted px-1.5 py-0.5 font-medium text-foreground" title={t("feed.explorationHint")}>
               {t("feed.exploration")}
