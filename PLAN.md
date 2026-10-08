@@ -93,7 +93,7 @@ Include user/org ownership columns from the start so team features don't require
 | `record-feedback` | Save like/skip/save/opened signals |
 | `update-interests` | Update the interest profile from a plain-language instruction |
 | `list-feed` | Return the ranked feed for a user (includes exploration slots) |
-| `build-digest` | Assemble a daily or weekly briefing |
+| `build-digest` | ~~Assemble a daily or weekly briefing~~ Not planned: no email/Slack delivery (see Phase 5); at most an in-app briefing view later |
 | `manage-sources` | Add, remove, enable, or disable sources |
 | `set-source-mode` | Set trusted_only, autonomous, or hybrid and the related limits |
 | `detect-connector` | Given a site or service, find the best connector (MCP, API, feed, sitemap, scrape) |
@@ -181,10 +181,10 @@ Built as four small PRs, each verified before the next:
 **Done when:** the user can say what they want more or less of, see the feed change, and see why.
 
 ### Phase 3a — More sources and clustering
-Built as four PRs: (A) sources, (B) clustering and badges, (C) comment synthesis, (D) source health. **D (source health) is built:** `check-source-health` assesses each source (failing: 3+ failed fetches in a row; never fetched; stale: newest item over 30 days old; mostly skipped: 5+ skips and 80%+ of reactions), stores the result for the Sources screen, refreshes after every fetch, and runs as a step of the daily update. It only flags sources the user added and switches off unhealthy agent-discovered ones (relevant from Phase 3b). **B (clustering) is built:** stories are grouped by normalized article URL (no fuzzy title matching, so two different pages are never merged), only the canonical item is read, summarized, and scored, the others are "also on" badges, and importance is the best measured buzz plus 10 per extra source. **A is built:** Lobsters, dev.to, GitHub (popular new repos; no official trending API), Product Hunt (public feed), subreddits via public RSS (Reddit's JSON API is blocked without OAuth, and its terms need review before we build on it, so no scores), OPML import, and a 50-source cap per user.
+Built as four PRs: (A) sources, (B) clustering and badges, (C) comment synthesis, (D) source health. **C is deferred by decision (2026-10-07): no comment support for now.** **D (source health) is built:** `check-source-health` assesses each source (failing: 3+ failed fetches in a row; never fetched; stale: newest item over 30 days old; mostly skipped: 5+ skips and 80%+ of reactions), stores the result for the Sources screen, refreshes after every fetch, and runs as a step of the daily update. It only flags sources the user added and switches off unhealthy agent-discovered ones (relevant from Phase 3b). **B (clustering) is built:** stories are grouped by normalized article URL (no fuzzy title matching, so two different pages are never merged), only the canonical item is read, summarized, and scored, the others are "also on" badges, and importance is the best measured buzz plus 10 per extra source. **A is built:** Lobsters, dev.to, GitHub (popular new repos; no official trending API), Product Hunt (public feed), subreddits via public RSS (Reddit's JSON API is blocked without OAuth, and its terms need review before we build on it, so no scores), OPML import, and a 50-source cap per user.
 - Add Reddit, Lobsters, dev.to, Product Hunt, and GitHub trending as sources. Check Reddit's API terms and rate limits before committing to it.
 - `cluster-items` with "seen on HN, Reddit, Lobsters" badges; feed cross-source presence into `importance`.
-- Comment synthesis in summaries.
+- ~~Comment synthesis in summaries.~~ Deferred: comments are the most prompt-injection-prone text we would handle and add stored content. If revisited: fetch only the top ~20 comments from Hacker News and Lobsters, store them as plain text, and require every claim in the synthesis to be backed by a verbatim quote from them, as for article summaries. `summaries.comment_synthesis` is reserved but unused.
 - Source manager UI (add RSS/OPML, subreddits).
 - `check-source-health` as a scheduled automation.
 
@@ -200,11 +200,21 @@ Built as four PRs: (A) sources, (B) clustering and badges, (C) comment synthesis
 - Natural-language queries over the archive ("what happened in AI tooling this week?").
 - Topic watches with threshold-based alerts.
 
-### Phase 5 — Digests and teams
-- `build-digest` with delivery to email and Slack, with user-selectable length and cadence.
-- Organizations: shared team feeds and a team digest, with per-person scoring layered on top. Use the framework's built-in auth, orgs, and sharing/permissions.
-- Expose actions via MCP/A2A so other agents can query Observer.
-- Optional: public RSS or topic-page output.
+### Phase 5 — Teams (and agent access)
+Decided 2026-10-08. **Order:** Phase 3b (source modes and discovery) comes first, then teams. Where 3c and Phase 4 fall relative to teams is not decided yet.
+
+**Teams: shared feed, shared sources, shared interests.** A team (the framework's organization) works from one feed:
+- **Team-owned:** the sources, **one shared team interest profile** (plain text, edited like today's), and the daily update. There is no per-person relevance scoring: each article is fetched, summarized, and scored once against the team's interests, so model cost does not grow with team size.
+- **Personal:** each member keeps their own read, like, skip, and save state, and their own Newest and Hide read choices. Nothing personal is shown to the team.
+- **Roles:** admins manage sources and the team's interests; members read and react (using the framework's roles and sharing). Whether any member may edit the interests is still open.
+- **Open details:** source trust (learned from feedback) should combine the whole team's feedback, or be dropped for team feeds; which of the personal toggles apply is settled above.
+- **Not in the first version:** curation features such as "recommend to the team" or a Team picks tab. A shared feed with shared sources is enough to start; curation can follow if it is missed.
+- **Testing needs real accounts:** local dev has one identity, so multi-person behavior can only be verified on a deployed site with real sign-ins.
+- Rough shape: scoping that every action and query uses learns "personal or team" (today everything is scoped by \`owner_email\`; \`org_id\` is stored but unused), then team-owned sources and interests, then roles.
+
+**No outbound email or Slack.** Users come to the app to find information, so there are no email or Slack digests, and Phase 4's topic-watch alerts are in-app only. \`build-digest\` and the \`digests\` table are not built; if a digest is ever wanted it would be an in-app "briefing" view.
+
+**Agent access (unchanged):** expose actions via MCP/A2A so other agents can query Observer. Optional: public RSS or topic-page output.
 
 ## Skills and memory
 
@@ -226,7 +236,7 @@ Built as four PRs: (A) sources, (B) clustering and badges, (C) comment synthesis
 
 ## Out of scope for the first pass
 
-Mobile app, browser extension, payments, public marketplace of feeds.
+Mobile app, browser extension, payments, public marketplace of feeds, and outbound email or Slack digests (decided: Observer is a place you visit, not a sender).
 
 ## Naming and branding
 
