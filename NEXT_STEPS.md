@@ -85,6 +85,7 @@ Decided so far (2026-10-08): **Phase 3b comes first, then teams.** No email or S
 
 - **Phase 3b: source modes and discovery (next).** Trusted-only, autonomous, and hybrid modes; `discover-sources`, `evaluate-source`, `review-candidate`; a review queue and "Discovered" badges. This is where the agent first proposes new sources, and where the auto-disable rule for unhealthy discovered sources starts to matter.
 - **Teams (after 3b).** One shared feed for a team: shared sources and **one shared team interest profile**, articles processed once for everyone, and personal read, like, skip, and save state. No per-person scoring, and no curation features in the first version. See Phase 5 in `PLAN.md`.
+- **Learning from feedback (Phase 2b, order not decided).** A dislike button with optional reasons, an evidence view of what your likes and dislikes say about themes, and agent-proposed changes to your interest profile that you approve. Needs real use first; see `PLAN.md`.
 - **Phase 3c: advanced connectors.** An MCP connector (approved servers, read-only tools) and a guarded scraper. The riskiest security surface, so it comes after the rest has been exercised.
 - **Phase 4: agent chat and alerts.** The agent knows the selected item ("summarize the comments on this", "more like this"), natural-language questions over the archive, and topic watches with in-app alerts.
 - **Agent access** (MCP/A2A so other agents can query Observer) and optional public RSS stay at the end.
